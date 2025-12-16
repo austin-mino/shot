@@ -1,315 +1,309 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <title>Final Android Shooter</title>
-    <style>
-        body { margin: 0; overflow: hidden; background-color: #111; user-select: none; }
-        
-        /* HUD (헤드업 디스플레이) 스타일 */
-        #ui-layer {
-            position: absolute; top: 20px; left: 20px; width: 100%;
-            pointer-events: none; z-index: 10;
-        }
-        .stat-box {
-            display: inline-block; background: rgba(0, 0, 0, 0.6);
-            color: white; padding: 10px 20px; border-radius: 8px;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            font-size: 20px; font-weight: bold; margin-right: 10px;
-            border: 1px solid rgba(255,255,255,0.2);
-        }
-        #hp-bar { color: #ff4444; }
-        #score-bar { color: #44ff44; }
+<meta charset="UTF-8">
+<title>Final Android Shooter</title>
 
-        /* 게임 오버 화면 */
-        #game-over {
-            display: none; /* 평소에는 숨김 */
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.85);
-            display: flex; flex-direction: column;
-            justify-content: center; align-items: center;
-            z-index: 100;
-        }
-        h1 { color: #ff3333; font-size: 80px; margin: 0; font-family: sans-serif; text-shadow: 0 0 20px red; }
-        p { color: white; font-size: 30px; font-family: sans-serif; margin: 20px 0; }
-        button {
-            padding: 15px 40px; font-size: 24px; cursor: pointer;
-            background: white; border: none; border-radius: 50px;
-            font-weight: bold; transition: 0.3s;
-        }
-        button:hover { background: #ff3333; color: white; transform: scale(1.1); }
-        
-        /* 피격 효과 (붉은 화면) */
-        #damage-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: red; opacity: 0; pointer-events: none; transition: opacity 0.2s;
-            z-index: 5;
-        }
-    </style>
+<style>
+body {
+    margin: 0;
+    overflow: hidden;
+    background: #111;
+    user-select: none;
+    font-family: sans-serif;
+}
+
+/* UI */
+#ui-layer {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 10;
+    pointer-events: none;
+}
+.stat-box {
+    display: inline-block;
+    background: rgba(0,0,0,0.6);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 8px;
+    margin-right: 10px;
+    font-size: 18px;
+    font-weight: bold;
+}
+#hp-bar { color: #ff5555; }
+#score-bar { color: #55ff55; }
+
+/* Crosshair */
+#crosshair {
+    position: fixed;
+    top: 50%; left: 50%;
+    width: 20px; height: 20px;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+#crosshair::before, #crosshair::after {
+    content: '';
+    position: absolute;
+    background: white;
+}
+#crosshair::before { width: 20px; height: 2px; top: 9px; left: 0; }
+#crosshair::after { width: 2px; height: 20px; left: 9px; top: 0; }
+
+/* Damage */
+#damage-overlay {
+    position: fixed;
+    inset: 0;
+    background: red;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+}
+
+/* Game Over */
+#game-over {
+    position: fixed;
+    inset: 0;
+    display: none;
+    background: rgba(0,0,0,0.85);
+    color: white;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    z-index: 20;
+}
+#game-over h1 {
+    font-size: 70px;
+    color: #ff3333;
+}
+#game-over button {
+    padding: 15px 40px;
+    font-size: 22px;
+    cursor: pointer;
+    border-radius: 40px;
+    border: none;
+}
+</style>
 </head>
+
 <body>
-    <div id="ui-layer">
-        <div class="stat-box" id="hp-bar">HP: 100</div>
-        <div class="stat-box" id="score-bar">SCORE: 0</div>
-        <div style="color: #aaa; margin-top: 5px; font-family: sans-serif; font-size: 14px;">WASD: 이동 | SPACE: 점프 | 마우스: 발사</div>
-    </div>
+<div id="ui-layer">
+    <div class="stat-box" id="hp-bar">HP: 100</div>
+    <div class="stat-box" id="score-bar">SCORE: 0</div>
+</div>
 
-    <div id="damage-overlay"></div>
+<div id="crosshair"></div>
+<div id="damage-overlay"></div>
 
-    <div id="game-over" style="display: none;">
-        <h1>GAME OVER</h1>
-        <p>Final Score: <span id="final-score">0</span></p>
-        <button onclick="location.reload()">RESTART</button>
-    </div>
+<div id="game-over">
+    <h1>GAME OVER</h1>
+    <p>Final Score: <span id="final-score">0</span></p>
+    <button onclick="location.reload()">RESTART</button>
+</div>
 
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* ================= 상태 ================= */
+let hp = 100;
+let score = 0;
+let isGameOver = false;
+
+const bullets = [];
+const enemies = [];
+const debris = [];
+
+const keys = {};
+let shootCooldown = 0;
+
+/* ================= 시야 ================= */
+let yaw = 0;
+let pitch = -0.3;
+const sensitivity = 0.002;
+
+/* ================= 씬 ================= */
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x222222);
+scene.fog = new THREE.FogExp2(0x222222, 0.02);
+
+const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+/* ================= 라이트 ================= */
+scene.add(new THREE.AmbientLight(0x404050, 0.6));
+const light = new THREE.DirectionalLight(0xffeedd, 2);
+light.position.set(30, 50, 30);
+light.castShadow = true;
+scene.add(light);
+
+/* ================= 바닥 ================= */
+const ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(300,300),
+    new THREE.MeshStandardMaterial({ color: 0x444444 })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+/* ================= 캐릭터 ================= */
+function createHumanoid(color) {
+    const g = new THREE.Group();
+    const m = new THREE.MeshStandardMaterial({ color });
+
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.3,1.2,16), m);
+    body.position.y = 1.6;
+    g.add(body);
+
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.3,16,16), m);
+    head.position.y = 2.4;
+    g.add(head);
+
+    g.castShadow = true;
+    return g;
+}
+
+const player = createHumanoid(0x0088ff);
+scene.add(player);
+
+/* ================= 입력 ================= */
+document.body.addEventListener('click', () => {
+    document.body.requestPointerLock();
+});
+
+addEventListener('mousemove', e => {
+    if (document.pointerLockElement !== document.body || isGameOver) return;
+    yaw -= e.movementX * sensitivity;
+    pitch -= e.movementY * sensitivity;
+    pitch = THREE.MathUtils.clamp(pitch, -1.2, 0.4);
+});
+
+addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
+addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+/* ================= 총 ================= */
+addEventListener('mousedown', () => {
+    if (shootCooldown > 0 || isGameOver) return;
+    shootCooldown = 10;
+
+    const bullet = new THREE.Mesh(
+        new THREE.BoxGeometry(0.1,0.1,0.6),
+        new THREE.MeshBasicMaterial({ color: 0xffaa00 })
+    );
+
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+
+    bullet.position.copy(player.position).add(new THREE.Vector3(0,2,0));
+    scene.add(bullet);
+
+    bullets.push({ mesh: bullet, vel: dir.multiplyScalar(3), life: 80 });
+});
+
+/* ================= 적 ================= */
+setInterval(() => {
+    if (enemies.length > 10 || isGameOver) return;
+    const e = createHumanoid(0xff4444);
+    const a = Math.random() * Math.PI * 2;
+    e.position.set(
+        player.position.x + Math.cos(a)*40,
+        0,
+        player.position.z + Math.sin(a)*40
+    );
+    scene.add(e);
+    enemies.push(e);
+}, 2000);
+
+/* ================= UI ================= */
+function updateUI() {
+    hpBar.innerText = `HP: ${hp}`;
+    scoreBar.innerText = `SCORE: ${score}`;
+}
+
+function damage() {
+    hp -= 20;
+    document.getElementById('damage-overlay').style.opacity = 0.5;
+    setTimeout(()=>damageOverlay.style.opacity=0,200);
+    if (hp <= 0) gameOver();
+    updateUI();
+}
+
+function gameOver() {
+    isGameOver = true;
+    finalScore.innerText = score;
+    gameOverBox.style.display = 'flex';
+}
+
+/* ================= 루프 ================= */
+function animate() {
+    requestAnimationFrame(animate);
+    if (isGameOver) return;
+
+    shootCooldown = Math.max(0, shootCooldown-1);
+
+    /* 이동 */
+    const speed = keys.shift ? 0.35 : 0.2;
+    if (keys.w) player.translateZ(-speed);
+    if (keys.s) player.translateZ(speed);
+    if (keys.a) player.translateX(-speed);
+    if (keys.d) player.translateX(speed);
+
+    player.rotation.y = yaw;
+
+    /* 카메라 */
+    const dist = 15;
+    camera.position.set(
+        player.position.x + Math.sin(yaw)*dist,
+        player.position.y + 6 + Math.sin(pitch)*4,
+        player.position.z + Math.cos(yaw)*dist
+    );
+    camera.lookAt(player.position.x, player.position.y+2, player.position.z);
+
+    /* 총알 */
+    bullets.forEach((b,i)=>{
+        b.mesh.position.add(b.vel);
+        b.life--;
+        enemies.forEach((e,j)=>{
+            if (b.mesh.position.distanceTo(e.position.clone().add(new THREE.Vector3(0,1.5,0))) < 1.3) {
+                scene.remove(e); enemies.splice(j,1);
+                scene.remove(b.mesh); bullets.splice(i,1);
+                score+=100; updateUI();
             }
-        }
-    </script>
-
-    <script type="module">
-        import * as THREE from 'three';
-
-        // --- 게임 상태 변수 ---
-        let hp = 100;
-        let score = 0;
-        let isGameOver = false;
-
-        const bullets = [];
-        const enemies = [];
-        const debrisList = [];
-        const keys = { w: false, a: false, s: false, d: false, space: false };
-        
-        let playerVelocityY = 0;
-        const gravity = -0.015;
-        const jumpPower = 0.4;
-        let isGrounded = true;
-
-        // UI 업데이트 함수
-        function updateUI() {
-            document.getElementById('hp-bar').innerText = `HP: ${hp}`;
-            document.getElementById('score-bar').innerText = `SCORE: ${score}`;
-        }
-
-        // 게임 오버 함수
-        function triggerGameOver() {
-            isGameOver = true;
-            document.getElementById('game-over').style.display = 'flex';
-            document.getElementById('final-score').innerText = score;
-        }
-
-        // 피격 효과 함수
-        function takeDamage() {
-            if(isGameOver) return;
-            hp -= 20; // 한 번 맞으면 체력 20 감소
-            updateUI();
-            
-            // 화면 붉게 깜빡임
-            const overlay = document.getElementById('damage-overlay');
-            overlay.style.opacity = 0.6;
-            setTimeout(() => { overlay.style.opacity = 0; }, 200);
-
-            if (hp <= 0) triggerGameOver();
-        }
-
-        // --- 캐릭터 생성 (안드로이드) ---
-        function createHumanoid(color, isPlayer) {
-            const group = new THREE.Group();
-            const material = new THREE.MeshStandardMaterial({ color: color, roughness: 0.5, metalness: 0.4 });
-
-            const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.3, 1.1, 16), material);
-            torso.position.y = 1.55; torso.castShadow = torso.receiveShadow = true; group.add(torso);
-
-            const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16), material);
-            head.position.y = torso.position.y + 0.8; head.castShadow = head.receiveShadow = true; group.add(head);
-            
-            const eye = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.1), new THREE.MeshStandardMaterial({ color: 0x000000, emissive: color, emissiveIntensity: 0.5 }));
-            eye.position.set(0, 0, 0.25); head.add(eye);
-
-            function createLimb(radius, length, posX, posY, posZ) {
-                 const pivot = new THREE.Group(); pivot.position.set(posX, posY, posZ);
-                 const limb = new THREE.Mesh(new THREE.CapsuleGeometry(radius, length * 0.7, 8, 16), material);
-                 limb.position.y = -length / 2; limb.castShadow = limb.receiveShadow = true;
-                 pivot.add(limb); group.add(pivot); return pivot;
-            }
-
-            const armL = 0.8; const legL = 1.0;
-            const leftArm = createLimb(0.12, armL, -0.5, torso.position.y + 0.4, 0);
-            const rightArm = createLimb(0.12, armL, 0.5, torso.position.y + 0.4, 0);
-            const leftLeg = createLimb(0.15, legL, -0.25, legL, 0);
-            const rightLeg = createLimb(0.15, legL, 0.25, legL, 0);
-
-            group.userData = { leftLeg, rightLeg, leftArm, rightArm, torso };
-
-            if(isPlayer) {
-                 const gun = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.2, 0.6), new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8 }));
-                 gun.position.set(0, -0.4, 0.3); rightArm.add(gun); group.userData.gunTip = gun;
-            }
-            return group;
-        }
-
-        function animateHumanoid(humanoid, time, isMoving) {
-            if (!isGrounded && humanoid === player) {
-                 humanoid.userData.leftLeg.rotation.x = -0.3; humanoid.userData.rightLeg.rotation.x = 0.5;
-                 humanoid.userData.leftArm.rotation.x = -0.5; humanoid.userData.rightArm.rotation.x = -0.5; return;
-            }
-            if (!isMoving) { 
-                humanoid.userData.leftLeg.rotation.x = humanoid.userData.rightLeg.rotation.x = 0;
-                humanoid.userData.leftArm.rotation.x = humanoid.userData.rightArm.rotation.x = 0; return; 
-            }
-            const angle = Math.sin(time * 10) * 0.6;
-            humanoid.userData.leftLeg.rotation.x = angle; humanoid.userData.rightLeg.rotation.x = -angle;
-            humanoid.userData.leftArm.rotation.x = -angle * 0.7; humanoid.userData.rightArm.rotation.x = angle * 0.7;
-        }
-
-        // --- 파편 효과 ---
-        function spawnDebris(position, color) {
-            for (let i = 0; i < 15; i++) {
-                const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), new THREE.MeshStandardMaterial({ color: color }));
-                mesh.position.copy(position);
-                mesh.userData.velocity = new THREE.Vector3((Math.random()-0.5)*1.5, Math.random()*2+0.5, (Math.random()-0.5)*1.5);
-                mesh.userData.rotationSpeed = new THREE.Vector3(Math.random(), Math.random(), Math.random()).multiplyScalar(0.2);
-                scene.add(mesh); debrisList.push(mesh);
-            }
-        }
-
-        // 1. 씬 설정
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x222222);
-        scene.fog = new THREE.FogExp2(0x222222, 0.02);
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        document.body.appendChild(renderer.domElement);
-
-        // 2. 조명 및 환경
-        const dirLight = new THREE.DirectionalLight(0xffeedd, 2);
-        dirLight.position.set(30, 50, 30); dirLight.castShadow = true;
-        dirLight.shadow.mapSize.set(2048, 2048);
-        dirLight.shadow.camera.top = 50; dirLight.shadow.camera.bottom = -50; dirLight.shadow.camera.left = -50; dirLight.shadow.camera.right = 50;
-        scene.add(dirLight); scene.add(new THREE.AmbientLight(0x404050, 0.5));
-
-        const plane = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.9 }));
-        plane.rotation.x = -Math.PI / 2; plane.receiveShadow = true; scene.add(plane);
-        
-        for(let i=0; i<30; i++) {
-            const obs = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x666666 }));
-            const s = 2 + Math.random() * 5;
-            obs.scale.set(s, s*0.7, s); obs.position.set((Math.random()-0.5)*150, s*0.35, (Math.random()-0.5)*150);
-            obs.castShadow = true; obs.receiveShadow = true; scene.add(obs);
-        }
-
-        // 3. 플레이어
-        const player = createHumanoid(0x0088ff, true); scene.add(player);
-        const playerSpeed = 0.2; let isPlayerMoving = false;
-
-        // 4. 입력
-        window.addEventListener('keydown', (e) => { 
-            if(isGameOver) return;
-            if (e.key.toLowerCase() in keys) keys[e.key.toLowerCase()] = true; 
-            if (e.code === 'Space') keys.space = true;
         });
-        window.addEventListener('keyup', (e) => { 
-            if (e.key.toLowerCase() in keys) keys[e.key.toLowerCase()] = false; 
-            if (e.code === 'Space') keys.space = false;
-        });
-
-        const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2(); const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-        window.addEventListener('mousemove', (e) => {
-            if(isGameOver) return;
-            mouse.x = (e.clientX / window.innerWidth) * 2 - 1; mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-            raycaster.setFromCamera(mouse, camera); const target = new THREE.Vector3(); raycaster.ray.intersectPlane(groundPlane, target);
-            if (target) player.lookAt(target.x, player.position.y, target.z);
-        });
-
-        window.addEventListener('mousedown', () => {
-            if(isGameOver) return;
-            const bullet = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.6), new THREE.MeshBasicMaterial({ color: 0xffaa00 }));
-            const gunTipPos = new THREE.Vector3(); player.userData.gunTip.getWorldPosition(gunTipPos);
-            bullet.position.copy(gunTipPos); bullet.quaternion.copy(player.quaternion); scene.add(bullet);
-            bullets.push({ mesh: bullet, velocity: new THREE.Vector3(0, 0, 2.5).applyQuaternion(player.quaternion), life: 100 });
-        });
-
-        // 5. 적 생성
-        setInterval(() => {
-            if(isGameOver || enemies.length > 15) return;
-            const enemy = createHumanoid(0xff4444, false);
-            const angle = Math.random() * Math.PI * 2; const distance = 30 + Math.random() * 20;
-            enemy.position.set(player.position.x + Math.cos(angle) * distance, 0, player.position.z + Math.sin(angle) * distance);
-            scene.add(enemy); enemies.push(enemy);
-        }, 2000);
-
-        // 6. 메인 루프
-        const clock = new THREE.Clock();
-        function animate() {
-            requestAnimationFrame(animate);
-            if(isGameOver) return; // 게임 오버면 멈춤
-
-            const time = clock.getElapsedTime();
-
-            // 점프 & 중력
-            if (keys.space && isGrounded) { playerVelocityY = jumpPower; isGrounded = false; }
-            playerVelocityY += gravity;
-            player.position.y += playerVelocityY;
-            if (player.position.y < 0) { player.position.y = 0; playerVelocityY = 0; isGrounded = true; }
-
-            // 이동
-            isPlayerMoving = false;
-            if (keys.w) { player.position.z -= playerSpeed; isPlayerMoving = true; }
-            if (keys.s) { player.position.z += playerSpeed; isPlayerMoving = true; }
-            if (keys.a) { player.position.x -= playerSpeed; isPlayerMoving = true; }
-            if (keys.d) { player.position.x += playerSpeed; isPlayerMoving = true; }
-            animateHumanoid(player, time, isPlayerMoving);
-            
-            camera.position.lerp(player.position.clone().add(new THREE.Vector3(0, 15, 15)), 0.1);
-            camera.lookAt(player.position);
-
-            // 총알 로직
-            for (let i = bullets.length - 1; i >= 0; i--) {
-                const b = bullets[i]; b.mesh.position.add(b.velocity); b.life--;
-                for (let j = enemies.length - 1; j >= 0; j--) {
-                    if (b.mesh.position.distanceTo(enemies[j].position.clone().add(new THREE.Vector3(0,1.5,0))) < 1.5) {
-                        spawnDebris(enemies[j].position.clone().add(new THREE.Vector3(0,1.5,0)), 0xff4444);
-                        scene.remove(enemies[j]); enemies.splice(j, 1);
-                        scene.remove(b.mesh); bullets.splice(i, 1);
-                        score += 100; updateUI(); // 점수 증가
-                        break;
-                    }
-                }
-                if (b.life <= 0 && bullets[i]) { scene.remove(b.mesh); bullets.splice(i, 1); }
-            }
-
-            // 적 AI 및 충돌 체크
-            for (let i = enemies.length - 1; i >= 0; i--) {
-                const enemy = enemies[i];
-                enemy.lookAt(player.position);
-                animateHumanoid(enemy, time, true);
-                enemy.position.add(new THREE.Vector3(0, 0, 1).applyQuaternion(enemy.quaternion).multiplyScalar(0.06));
-
-                // 플레이어와 충돌 체크
-                if (enemy.position.distanceTo(player.position) < 1.0) {
-                    takeDamage(); // 데미지 입음
-                    // 적은 뒤로 살짝 튕겨남 (중복 타격 방지)
-                    enemy.translateZ(-3);
-                }
-            }
-
-            // 파편 물리
-            for(let i = debrisList.length - 1; i >= 0; i--) {
-                const debris = debrisList[i];
-                debris.userData.velocity.y -= 0.1; debris.position.add(debris.userData.velocity);
-                debris.rotation.x += debris.userData.rotationSpeed.x; debris.rotation.y += debris.userData.rotationSpeed.y;
-                if(debris.position.y < -5) { scene.remove(debris); debrisList.splice(i, 1); }
-            }
-
-            renderer.render(scene, camera);
+        if (b.life<=0) {
+            scene.remove(b.mesh); bullets.splice(i,1);
         }
-        animate();
-        window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth,window.innerHeight); });
-    </script>
+    });
+
+    /* 적 */
+    enemies.forEach(e=>{
+        e.lookAt(player.position);
+        e.translateZ(0.06);
+        if (e.position.distanceTo(player.position) < 1) {
+            damage();
+            e.translateZ(-3);
+        }
+    });
+
+    renderer.render(scene,camera);
+}
+animate();
+
+addEventListener('resize',()=>{
+    camera.aspect = innerWidth/innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth,innerHeight);
+});
+</script>
 </body>
 </html>
