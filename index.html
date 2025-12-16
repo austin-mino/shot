@@ -2,56 +2,29 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<title>Android Shooter FINAL</title>
+<title>SHOT GAME FINAL</title>
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
-
 <style>
-body { margin:0; overflow:hidden; background:#111; touch-action:none; }
-canvas { display:block; }
-
-#ui {
-  position:absolute; top:10px; left:10px; z-index:10;
-  color:white; font-family:sans-serif;
-}
-.bar { background:rgba(0,0,0,.6); padding:8px 14px; border-radius:8px; margin-bottom:5px; }
-
-#boss-bar {
-  position:absolute; top:10px; left:50%; transform:translateX(-50%);
-  width:300px; height:20px; background:#400; border-radius:10px; display:none;
-}
-#boss-hp {
-  height:100%; width:100%; background:red; border-radius:10px;
-}
-
-#joystick {
-  position:absolute; bottom:20px; left:20px;
-  width:120px; height:120px; border-radius:50%;
-  background:rgba(255,255,255,.1);
-}
-#stick {
-  position:absolute; width:40px; height:40px; border-radius:50%;
-  background:rgba(255,255,255,.5); left:40px; top:40px;
-}
-
-.btn {
-  position:absolute; bottom:40px; width:70px; height:70px;
-  border-radius:50%; background:rgba(255,255,255,.25);
-  color:white; font-size:14px; display:flex;
-  align-items:center; justify-content:center;
-}
-#shootBtn { right:30px; }
-#jumpBtn { right:120px; bottom:120px; }
+body{margin:0;overflow:hidden;background:#000;touch-action:none}
+canvas{display:block}
+#ui{position:absolute;top:10px;left:10px;color:#fff;font-family:sans-serif;z-index:5}
+.bar{background:rgba(0,0,0,.6);padding:6px 12px;border-radius:6px;margin-bottom:4px}
+#bossBar{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:300px;height:18px;background:#300;border-radius:9px;display:none}
+#bossHP{height:100%;width:100%;background:red;border-radius:9px}
+#joystick{position:absolute;bottom:20px;left:20px;width:120px;height:120px;border-radius:50%;background:rgba(255,255,255,.1)}
+#stick{position:absolute;left:40px;top:40px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.5)}
+.btn{position:absolute;width:70px;height:70px;border-radius:50%;background:rgba(255,255,255,.25);color:#fff;display:flex;align-items:center;justify-content:center}
+#shootBtn{right:30px;bottom:40px}
+#jumpBtn{right:120px;bottom:120px}
 </style>
 </head>
-
 <body>
 
 <div id="ui">
   <div class="bar" id="hp">HP:100</div>
   <div class="bar" id="score">SCORE:0</div>
 </div>
-
-<div id="boss-bar"><div id="boss-hp"></div></div>
+<div id="bossBar"><div id="bossHP"></div></div>
 
 <div id="joystick"><div id="stick"></div></div>
 <div class="btn" id="shootBtn">SHOOT</div>
@@ -60,20 +33,21 @@ canvas { display:block; }
 <script type="module">
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 
-/* =======================
-   기본 상태
-======================= */
-let hp=100, score=0;
-let bullets=[], enemies=[], obstacles=[];
+/* =====================
+   기본 변수
+===================== */
+let score=0,hp=100;
+let bullets=[], enemies=[];
 let boss=null;
 let vy=0, grounded=true;
+let keys={};
 
-/* =======================
+/* =====================
    씬
-======================= */
+===================== */
 const scene=new THREE.Scene();
-scene.background=new THREE.Color(0x222222);
-scene.fog=new THREE.Fog(0x222222,30,140);
+scene.background=new THREE.Color(0x202020);
+scene.fog=new THREE.Fog(0x202020,30,180);
 
 const camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,.1,500);
 const renderer=new THREE.WebGLRenderer({antialias:true});
@@ -82,181 +56,170 @@ renderer.shadowMap.enabled=true;
 document.body.appendChild(renderer.domElement);
 
 scene.add(new THREE.AmbientLight(0x555555));
-const sun=new THREE.DirectionalLight(0xffffff,1.4);
+const sun=new THREE.DirectionalLight(0xffffff,1.2);
 sun.position.set(30,50,30);
 sun.castShadow=true;
 scene.add(sun);
 
-/* =======================
-   지면
-======================= */
+/* =====================
+   바닥
+===================== */
 const ground=new THREE.Mesh(
-  new THREE.PlaneGeometry(400,400),
+  new THREE.PlaneGeometry(500,500),
   new THREE.MeshStandardMaterial({color:0x444444})
 );
 ground.rotation.x=-Math.PI/2;
 ground.receiveShadow=true;
 scene.add(ground);
 
-/* =======================
-   사람
-======================= */
-function human(color,scale=1){
+/* =====================
+   디테일한 캐릭터
+===================== */
+function detailedHuman(color){
   const g=new THREE.Group();
   const m=new THREE.MeshStandardMaterial({color});
-  const body=new THREE.Mesh(new THREE.BoxGeometry(.7,1.2,.4),m);
-  body.position.y=1.8; body.castShadow=true;
-  g.add(body);
+
+  const torso=new THREE.Mesh(new THREE.BoxGeometry(.8,1.2,.5),m);
+  torso.position.y=2.2; g.add(torso);
+
+  const neck=new THREE.Mesh(new THREE.CylinderGeometry(.15,.15,.2),m);
+  neck.position.y=2.9; g.add(neck);
 
   const head=new THREE.Mesh(new THREE.SphereGeometry(.35),m);
-  head.position.y=2.6; head.castShadow=true;
-  g.add(head);
+  head.position.y=3.3; g.add(head);
 
-  g.scale.setScalar(scale);
+  function arm(x){
+    const a=new THREE.Group();
+    const u=new THREE.Mesh(new THREE.BoxGeometry(.25,.7,.25),m);
+    u.position.y=-.35; a.add(u);
+    const l=new THREE.Mesh(new THREE.BoxGeometry(.2,.6,.2),m);
+    l.position.y=-1; a.add(l);
+    a.position.set(x,2.7,0);
+    return a;
+  }
+
+  function leg(x){
+    const l=new THREE.Group();
+    const u=new THREE.Mesh(new THREE.BoxGeometry(.3,.8,.3),m);
+    u.position.y=-.4; l.add(u);
+    const d=new THREE.Mesh(new THREE.BoxGeometry(.25,.7,.25),m);
+    d.position.y=-1.1; l.add(d);
+    const f=new THREE.Mesh(new THREE.BoxGeometry(.3,.15,.5),m);
+    f.position.set(0,-1.5,.1); l.add(f);
+    l.position.set(x,1.4,0);
+    return l;
+  }
+
+  g.add(arm(-.6),arm(.6),leg(-.25),leg(.25));
+  g.traverse(o=>o.castShadow=true);
   return g;
 }
 
-/* =======================
-   플레이어
-======================= */
-const player=human(0x00aaff);
+const player=detailedHuman(0x00aaff);
 scene.add(player);
 
-/* =======================
-   장애물
-======================= */
-for(let i=0;i<20;i++){
-  const s=2+Math.random()*4;
-  const o=new THREE.Mesh(
-    new THREE.BoxGeometry(s,s*.7,s),
-    new THREE.MeshStandardMaterial({color:0x666})
-  );
-  o.position.set((Math.random()-.5)*120,s*.35,(Math.random()-.5)*120);
-  o.castShadow=o.receiveShadow=true;
-  scene.add(o); obstacles.push(o);
-}
+/* =====================
+   입력
+===================== */
+addEventListener('keydown',e=>keys[e.key.toLowerCase()]=true);
+addEventListener('keyup',e=>keys[e.key.toLowerCase()]=false);
 
-/* =======================
-   보스 생성
-======================= */
-function spawnBoss(){
-  boss={
-    mesh:human(0xaa0000,3),
-    hp:2000,
-    phase:0,
-    timer:0
-  };
-  boss.mesh.position.set(0,0,-60);
-  scene.add(boss.mesh);
-  document.getElementById('boss-bar').style.display='block';
-}
-setTimeout(spawnBoss,15000);
-
-/* =======================
+/* =====================
    총알
-======================= */
+===================== */
 function shoot(){
   const b=new THREE.Mesh(
     new THREE.BoxGeometry(.15,.15,.6),
     new THREE.MeshBasicMaterial({color:0xffaa00})
   );
   b.position.copy(player.position);
-  b.position.y+=1.8;
-  b.quaternion.copy(player.quaternion);
+  b.position.y+=2.5;
   scene.add(b);
-  bullets.push({m:b,v:new THREE.Vector3(0,0,3).applyQuaternion(player.quaternion),l:120});
+  bullets.push({m:b,v:new THREE.Vector3(0,0,-1.5)});
 }
 
-/* =======================
+/* =====================
+   보스
+===================== */
+function spawnBoss(){
+  boss={
+    mesh:detailedHuman(0xaa0000),
+    hp:5000
+  };
+  boss.mesh.scale.set(4,4,4);
+  boss.mesh.position.set(0,0,-80);
+  scene.add(boss.mesh);
+  document.getElementById('bossBar').style.display='block';
+}
+
+/* =====================
    모바일 UI
-======================= */
-let joyX=0, joyY=0;
+===================== */
+let joyX=0,joyY=0;
 const stick=document.getElementById('stick');
 
-document.getElementById('joystick').addEventListener('touchmove',e=>{
+document.getElementById('joystick').ontouchmove=e=>{
   const t=e.touches[0];
-  const r=60;
-  const dx=Math.max(-r,Math.min(r,t.clientX-80));
-  const dy=Math.max(-r,Math.min(r,t.clientY-(innerHeight-80)));
-  stick.style.left=dx+40+'px';
-  stick.style.top=dy+40+'px';
-  joyX=dx/r; joyY=dy/r;
-});
-document.getElementById('joystick').addEventListener('touchend',()=>{
-  stick.style.left='40px'; stick.style.top='40px';
-  joyX=joyY=0;
-});
-document.getElementById('shootBtn').addEventListener('touchstart',shoot);
-document.getElementById('jumpBtn').addEventListener('touchstart',()=>{
-  if(grounded){vy=0.5; grounded=false;}
-});
+  const dx=t.clientX-80;
+  const dy=t.clientY-(innerHeight-80);
+  joyX=Math.max(-1,Math.min(1,dx/60));
+  joyY=Math.max(-1,Math.min(1,dy/60));
+  stick.style.left=joyX*40+40+'px';
+  stick.style.top=joyY*40+40+'px';
+};
+document.getElementById('joystick').ontouchend=()=>{
+  joyX=joyY=0; stick.style.left='40px'; stick.style.top='40px';
+};
+shootBtn.ontouchstart=shoot;
+jumpBtn.ontouchstart=()=>{if(grounded){vy=.6;grounded=false;}};
 
-/* =======================
+/* =====================
    루프
-======================= */
-function animate(){
-  requestAnimationFrame(animate);
+===================== */
+function loop(){
+  requestAnimationFrame(loop);
 
   /* 이동 */
-  player.position.x+=joyX*0.25;
-  player.position.z+=joyY*0.25;
+  let mx=joyX,my=joyY;
+  if(keys.w)my=-1;
+  if(keys.s)my=1;
+  if(keys.a)mx=-1;
+  if(keys.d)mx=1;
+  player.position.x+=mx*.25;
+  player.position.z+=my*.25;
 
   /* 중력 */
-  vy-=0.02; player.position.y+=vy;
-  grounded=false;
-  obstacles.forEach(o=>{
-    const top=o.position.y+o.geometry.parameters.height/2;
-    if(Math.abs(player.position.x-o.position.x)<1 &&
-       Math.abs(player.position.z-o.position.z)<1 &&
-       player.position.y<=top+0.3){
-      player.position.y=top; vy=0; grounded=true;
-    }
-  });
-  if(player.position.y<0){player.position.y=0;vy=0;grounded=true;}
+  vy-=.03;
+  player.position.y+=vy;
+  if(player.position.y<=0){player.position.y=0;vy=0;grounded=true;}
 
   /* 총알 */
-  for(let i=bullets.length-1;i>=0;i--){
-    const b=bullets[i];
-    b.m.position.add(b.v); b.l--;
-    if(boss && b.m.position.distanceTo(boss.mesh.position)<3){
+  bullets.forEach(b=>{
+    b.m.position.add(b.v);
+    if(boss && b.m.position.distanceTo(boss.mesh.position)<6){
       boss.hp-=20;
-      document.getElementById('boss-hp').style.width=(boss.hp/2000*100)+'%';
+      document.getElementById('bossHP').style.width=(boss.hp/5000*100)+'%';
     }
-    if(b.l<0){scene.remove(b.m); bullets.splice(i,1);}
-  }
+  });
 
-  /* 보스 AI */
+  /* 점수 증가 */
+  score++;
+  score>15000 && !boss && spawnBoss();
+  document.getElementById('score').innerText='SCORE:'+score;
+
+  /* 보스 이동 */
   if(boss){
-    boss.timer++;
     boss.mesh.lookAt(player.position);
-    boss.mesh.translateZ(0.15);
-    if(boss.timer%120===0){
-      for(let i=0;i<12;i++){
-        const a=i*Math.PI/6;
-        const bb=new THREE.Mesh(
-          new THREE.BoxGeometry(.2,.2,.6),
-          new THREE.MeshBasicMaterial({color:0xff4444})
-        );
-        bb.position.copy(boss.mesh.position);
-        scene.add(bb);
-        bullets.push({m:bb,v:new THREE.Vector3(Math.sin(a),0,Math.cos(a)).multiplyScalar(1.5),l:120});
-      }
-    }
-    if(boss.hp<=0){
-      scene.remove(boss.mesh);
-      document.getElementById('boss-bar').style.display='none';
-      alert('GAME CLEAR');
-      boss=null;
-    }
+    boss.mesh.translateZ(.15);
   }
 
   /* 카메라 */
-  camera.position.lerp(player.position.clone().add(new THREE.Vector3(0,15,18)),0.1);
+  camera.position.lerp(player.position.clone().add(new THREE.Vector3(0,18,22)),.1);
   camera.lookAt(player.position);
 
   renderer.render(scene,camera);
 }
-animate();
+loop();
 
 addEventListener('resize',()=>{
   camera.aspect=innerWidth/innerHeight;
