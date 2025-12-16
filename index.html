@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Final Android Shooter</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 
 <style>
 body {
@@ -11,34 +12,31 @@ body {
     background: #111;
     user-select: none;
     font-family: sans-serif;
+    touch-action: none;
 }
 
-/* UI */
+/* HUD */
 #ui-layer {
-    position: absolute;
-    top: 20px;
-    left: 20px;
+    position: fixed;
+    top: 15px;
+    left: 15px;
     z-index: 10;
     pointer-events: none;
 }
 .stat-box {
-    display: inline-block;
     background: rgba(0,0,0,0.6);
     color: white;
-    padding: 10px 20px;
+    padding: 8px 16px;
     border-radius: 8px;
-    margin-right: 10px;
-    font-size: 18px;
+    margin-bottom: 6px;
     font-weight: bold;
 }
-#hp-bar { color: #ff5555; }
-#score-bar { color: #55ff55; }
 
 /* Crosshair */
 #crosshair {
     position: fixed;
     top: 50%; left: 50%;
-    width: 20px; height: 20px;
+    width: 18px; height: 18px;
     transform: translate(-50%, -50%);
     pointer-events: none;
 }
@@ -47,57 +45,92 @@ body {
     position: absolute;
     background: white;
 }
-#crosshair::before { width: 20px; height: 2px; top: 9px; left: 0; }
-#crosshair::after { width: 2px; height: 20px; left: 9px; top: 0; }
+#crosshair::before { width: 18px; height: 2px; top: 8px; left: 0; }
+#crosshair::after { width: 2px; height: 18px; left: 8px; top: 0; }
+
+/* Mobile Controls */
+.joystick {
+    position: fixed;
+    bottom: 40px;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.1);
+    touch-action: none;
+}
+#move-joy { left: 30px; }
+#look-joy { right: 30px; }
+
+.joy-stick {
+    position: absolute;
+    width: 50px;
+    height: 50px;
+    background: rgba(255,255,255,0.6);
+    border-radius: 50%;
+    left: 35px;
+    top: 35px;
+}
+
+/* Shoot Button */
+#shoot-btn {
+    position: fixed;
+    right: 50%;
+    bottom: 50px;
+    transform: translateX(50%);
+    width: 80px;
+    height: 80px;
+    background: rgba(255,80,80,0.8);
+    border-radius: 50%;
+    color: white;
+    font-weight: bold;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
 
 /* Damage */
-#damage-overlay {
+#damage {
     position: fixed;
     inset: 0;
     background: red;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.2s;
+    transition: 0.2s;
 }
 
 /* Game Over */
 #game-over {
     position: fixed;
     inset: 0;
-    display: none;
     background: rgba(0,0,0,0.85);
+    display: none;
     color: white;
     justify-content: center;
     align-items: center;
     flex-direction: column;
     z-index: 20;
 }
-#game-over h1 {
-    font-size: 70px;
-    color: #ff3333;
-}
-#game-over button {
-    padding: 15px 40px;
-    font-size: 22px;
-    cursor: pointer;
-    border-radius: 40px;
-    border: none;
-}
 </style>
 </head>
 
 <body>
+
 <div id="ui-layer">
-    <div class="stat-box" id="hp-bar">HP: 100</div>
-    <div class="stat-box" id="score-bar">SCORE: 0</div>
+    <div class="stat-box" id="hp">HP: 100</div>
+    <div class="stat-box" id="score">SCORE: 0</div>
 </div>
 
 <div id="crosshair"></div>
-<div id="damage-overlay"></div>
+
+<!-- Mobile UI -->
+<div class="joystick" id="move-joy"><div class="joy-stick"></div></div>
+<div class="joystick" id="look-joy"><div class="joy-stick"></div></div>
+<div id="shoot-btn">FIRE</div>
+
+<div id="damage"></div>
 
 <div id="game-over">
     <h1>GAME OVER</h1>
-    <p>Final Score: <span id="final-score">0</span></p>
     <button onclick="location.reload()">RESTART</button>
 </div>
 
@@ -112,186 +145,165 @@ body {
 <script type="module">
 import * as THREE from 'three';
 
-/* ================= 상태 ================= */
-let hp = 100;
-let score = 0;
-let isGameOver = false;
+/* ===== 디바이스 ===== */
+const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent);
 
-const bullets = [];
-const enemies = [];
-const debris = [];
-
-const keys = {};
+/* ===== 상태 ===== */
+let hp = 100, score = 0, isGameOver = false;
+let yaw = 0, pitch = -0.3;
 let shootCooldown = 0;
 
-/* ================= 시야 ================= */
-let yaw = 0;
-let pitch = -0.3;
-const sensitivity = 0.002;
-
-/* ================= 씬 ================= */
+/* ===== 씬 ===== */
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x222222);
-scene.fog = new THREE.FogExp2(0x222222, 0.02);
 
-const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.1, 1000);
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias:true });
 renderer.setSize(innerWidth, innerHeight);
-renderer.shadowMap.enabled = true;
 document.body.appendChild(renderer.domElement);
 
-/* ================= 라이트 ================= */
-scene.add(new THREE.AmbientLight(0x404050, 0.6));
-const light = new THREE.DirectionalLight(0xffeedd, 2);
-light.position.set(30, 50, 30);
-light.castShadow = true;
-scene.add(light);
+/* ===== 조명 ===== */
+scene.add(new THREE.AmbientLight(0x404050, 0.7));
+const sun = new THREE.DirectionalLight(0xffeedd, 2);
+sun.position.set(30,50,30);
+scene.add(sun);
 
-/* ================= 바닥 ================= */
+/* ===== 바닥 ===== */
 const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(300,300),
-    new THREE.MeshStandardMaterial({ color: 0x444444 })
+    new THREE.MeshStandardMaterial({ color:0x444444 })
 );
-ground.rotation.x = -Math.PI / 2;
-ground.receiveShadow = true;
+ground.rotation.x = -Math.PI/2;
 scene.add(ground);
 
-/* ================= 캐릭터 ================= */
-function createHumanoid(color) {
-    const g = new THREE.Group();
-    const m = new THREE.MeshStandardMaterial({ color });
-
-    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.35,0.3,1.2,16), m);
-    body.position.y = 1.6;
-    g.add(body);
-
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.3,16,16), m);
-    head.position.y = 2.4;
-    g.add(head);
-
-    g.castShadow = true;
-    return g;
-}
-
-const player = createHumanoid(0x0088ff);
+/* ===== 플레이어 ===== */
+const player = new THREE.Mesh(
+    new THREE.CapsuleGeometry(0.4,1.2,4,8),
+    new THREE.MeshStandardMaterial({ color:0x0088ff })
+);
+player.position.y = 1;
 scene.add(player);
 
-/* ================= 입력 ================= */
-document.body.addEventListener('click', () => {
-    document.body.requestPointerLock();
-});
+/* ===== 모바일 조이스틱 ===== */
+let moveVec = {x:0,y:0}, lookVec={x:0,y:0};
 
-addEventListener('mousemove', e => {
-    if (document.pointerLockElement !== document.body || isGameOver) return;
-    yaw -= e.movementX * sensitivity;
-    pitch -= e.movementY * sensitivity;
-    pitch = THREE.MathUtils.clamp(pitch, -1.2, 0.4);
-});
+function setupJoystick(el, vec) {
+    const stick = el.children[0];
+    let start = null;
 
-addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
-addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+    el.addEventListener('touchstart', e=>{
+        start = e.touches[0];
+    });
+    el.addEventListener('touchmove', e=>{
+        const t = e.touches[0];
+        const dx = t.clientX - start.clientX;
+        const dy = t.clientY - start.clientY;
+        const len = Math.min(40, Math.hypot(dx,dy));
+        const ang = Math.atan2(dy,dx);
+        stick.style.transform = `translate(${Math.cos(ang)*len}px,${Math.sin(ang)*len}px)`;
+        vec.x = Math.cos(ang)*len/40;
+        vec.y = Math.sin(ang)*len/40;
+    });
+    el.addEventListener('touchend', ()=>{
+        stick.style.transform = '';
+        vec.x = vec.y = 0;
+    });
+}
 
-/* ================= 총 ================= */
-addEventListener('mousedown', () => {
-    if (shootCooldown > 0 || isGameOver) return;
-    shootCooldown = 10;
+setupJoystick(move-joy, moveVec);
+setupJoystick(look-joy, lookVec);
+
+/* ===== 사격 ===== */
+shoot-btn.addEventListener('touchstart', shoot);
+
+function shoot() {
+    if (shootCooldown>0 || isGameOver) return;
+    shootCooldown = 12;
 
     const bullet = new THREE.Mesh(
         new THREE.BoxGeometry(0.1,0.1,0.6),
-        new THREE.MeshBasicMaterial({ color: 0xffaa00 })
+        new THREE.MeshBasicMaterial({ color:0xffaa00 })
     );
-
     const dir = new THREE.Vector3();
     camera.getWorldDirection(dir);
-
-    bullet.position.copy(player.position).add(new THREE.Vector3(0,2,0));
+    bullet.position.copy(player.position).add(new THREE.Vector3(0,1.5,0));
+    bullet.userData = { vel: dir.multiplyScalar(3), life:80 };
     scene.add(bullet);
+    bullets.push(bullet);
+}
 
-    bullets.push({ mesh: bullet, vel: dir.multiplyScalar(3), life: 80 });
-});
+const bullets = [];
+const enemies = [];
 
-/* ================= 적 ================= */
-setInterval(() => {
-    if (enemies.length > 10 || isGameOver) return;
-    const e = createHumanoid(0xff4444);
-    const a = Math.random() * Math.PI * 2;
-    e.position.set(
-        player.position.x + Math.cos(a)*40,
-        0,
-        player.position.z + Math.sin(a)*40
+/* ===== 적 ===== */
+setInterval(()=>{
+    if(enemies.length>8||isGameOver) return;
+    const e = new THREE.Mesh(
+        new THREE.CapsuleGeometry(0.4,1.2,4,8),
+        new THREE.MeshStandardMaterial({ color:0xff4444 })
     );
-    scene.add(e);
-    enemies.push(e);
-}, 2000);
+    const a=Math.random()*Math.PI*2;
+    e.position.set(Math.cos(a)*40,1,Math.sin(a)*40);
+    scene.add(e); enemies.push(e);
+},2000);
 
-/* ================= UI ================= */
-function updateUI() {
-    hpBar.innerText = `HP: ${hp}`;
-    scoreBar.innerText = `SCORE: ${score}`;
-}
-
+/* ===== 데미지 ===== */
 function damage() {
-    hp -= 20;
-    document.getElementById('damage-overlay').style.opacity = 0.5;
-    setTimeout(()=>damageOverlay.style.opacity=0,200);
-    if (hp <= 0) gameOver();
-    updateUI();
+    hp-=20;
+    damage.style.opacity=0.5;
+    setTimeout(()=>damage.style.opacity=0,200);
+    hp<=0 && gameOver();
+    hpDiv.innerText=`HP: ${hp}`;
 }
 
-function gameOver() {
-    isGameOver = true;
-    finalScore.innerText = score;
-    gameOverBox.style.display = 'flex';
-}
-
-/* ================= 루프 ================= */
-function animate() {
+/* ===== 루프 ===== */
+function animate(){
     requestAnimationFrame(animate);
-    if (isGameOver) return;
+    if(isGameOver) return;
 
-    shootCooldown = Math.max(0, shootCooldown-1);
+    shootCooldown=Math.max(0,shootCooldown-1);
 
-    /* 이동 */
-    const speed = keys.shift ? 0.35 : 0.2;
-    if (keys.w) player.translateZ(-speed);
-    if (keys.s) player.translateZ(speed);
-    if (keys.a) player.translateX(-speed);
-    if (keys.d) player.translateX(speed);
+    /* 시야 */
+    yaw -= lookVec.x*0.05;
+    pitch -= lookVec.y*0.05;
+    pitch = THREE.MathUtils.clamp(pitch,-1.2,0.4);
 
     player.rotation.y = yaw;
 
+    /* 이동 */
+    player.translateZ(-moveVec.y*0.25);
+    player.translateX(moveVec.x*0.25);
+
     /* 카메라 */
-    const dist = 15;
     camera.position.set(
-        player.position.x + Math.sin(yaw)*dist,
+        player.position.x + Math.sin(yaw)*15,
         player.position.y + 6 + Math.sin(pitch)*4,
-        player.position.z + Math.cos(yaw)*dist
+        player.position.z + Math.cos(yaw)*15
     );
-    camera.lookAt(player.position.x, player.position.y+2, player.position.z);
+    camera.lookAt(player.position.x,player.position.y+1.5,player.position.z);
 
     /* 총알 */
     bullets.forEach((b,i)=>{
-        b.mesh.position.add(b.vel);
-        b.life--;
+        b.position.add(b.userData.vel);
+        b.userData.life--;
         enemies.forEach((e,j)=>{
-            if (b.mesh.position.distanceTo(e.position.clone().add(new THREE.Vector3(0,1.5,0))) < 1.3) {
+            if(b.position.distanceTo(e.position)<1){
                 scene.remove(e); enemies.splice(j,1);
-                scene.remove(b.mesh); bullets.splice(i,1);
-                score+=100; updateUI();
+                scene.remove(b); bullets.splice(i,1);
+                score+=100; scoreDiv.innerText=`SCORE: ${score}`;
             }
         });
-        if (b.life<=0) {
-            scene.remove(b.mesh); bullets.splice(i,1);
+        if(b.userData.life<=0){
+            scene.remove(b); bullets.splice(i,1);
         }
     });
 
     /* 적 */
     enemies.forEach(e=>{
         e.lookAt(player.position);
-        e.translateZ(0.06);
-        if (e.position.distanceTo(player.position) < 1) {
-            damage();
-            e.translateZ(-3);
+        e.translateZ(0.05);
+        if(e.position.distanceTo(player.position)<1){
+            damage(); e.translateZ(-2);
         }
     });
 
@@ -300,7 +312,7 @@ function animate() {
 animate();
 
 addEventListener('resize',()=>{
-    camera.aspect = innerWidth/innerHeight;
+    camera.aspect=innerWidth/innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth,innerHeight);
 });
