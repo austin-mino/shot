@@ -570,9 +570,6 @@ if (fireCooldown > 0) fireCooldown--;
     boss = null;
     state.bossSpawned = false;
 
-    // ★ 이 줄이 핵심
-    state.nextBossScore = Math.ceil(state.score / 10000) * 10000;
-
     document.getElementById('boss-ui').style.display = 'none';
 }
 
