@@ -125,7 +125,7 @@
 
         const state = {
             hp: 100, score: 0, isGameOver: false, isGameActive: false,
-            bossSpawned: false, nextBossScore: 15000,
+            bossSpawned: false, nextBossScore: 5000,
             bullets: [], enemies: [], obstacles: [], debris: [],
             cameraMode: 'TPS', 
             // 구면 좌표계 사용 (phi: 수직, theta: 수평)
@@ -499,7 +499,7 @@ if (fireCooldown > 0) fireCooldown--;
             }
 
             // 4. 적 스폰 & AI
-            if(state.score >= state.nextBossScore && !state.bossSpawned) { spawnBoss(); state.nextBossScore += 15000; }
+            if(state.score >= state.nextBossScore && !state.bossSpawned) { spawnBoss(); state.nextBossScore += 5000; }
             if(!boss && state.enemies.length < 15 && Math.random() < 0.03) {
                 const e = createDetailedHumanoid(0xff4444, false); const a = Math.random()*6.28; const r = 30+Math.random()*20;
                 e.position.set(player.position.x+Math.cos(a)*r, 10, player.position.z+Math.sin(a)*r); scene.add(e); state.enemies.push(e);
