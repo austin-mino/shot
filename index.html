@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Final Android Shooter v10 (Perfect Aim & Cam)</title>
+    <title>Final</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; user-select: none; touch-action: none; font-family: 'Segoe UI', sans-serif; }
         
@@ -265,14 +265,12 @@
         });
 
         // [핵심] 발사 (PointerDown 이벤트로 통합 - 터치패드/클릭 모두 대응)
-        document.addEventListener('pointerdown', (e) => {
-            if (state.isGameActive || isMobile) {
-                // UI 버튼 클릭이 아닐 때만 발사
-                if(e.target.tagName !== 'DIV' || e.target.id === 'ui-layer') {
-                    fireBullet();
-                }
-            }
-        });
+       document.addEventListener('pointerdown', () => {
+    if (state.isGameActive || isMobile) {
+        fireBullet();
+    }
+});
+
 
         window.addEventListener('keydown', e => {
             const k = e.key.toLowerCase(); if (input.hasOwnProperty(k)) input[k] = true;
