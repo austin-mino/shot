@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Final Android Shooter v8.0 (Detailed & Fixed)</title>
+    <title>Final Android Shooter v9.0 (Fixed & Final)</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; user-select: none; touch-action: none; font-family: 'Segoe UI', sans-serif; }
         
@@ -31,7 +31,7 @@
         #hp-bar { color: #ff4444; border-bottom: 3px solid #ff4444; }
         #score-bar { color: #44ff44; border-bottom: 3px solid #44ff44; }
 
-        /* 보스 체력바 */
+        /* 보스 UI */
         #boss-ui {
             display: none; position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
             width: 50%; height: 25px; background: #222; border: 2px solid white; border-radius: 12px; overflow: hidden;
@@ -44,7 +44,7 @@
         /* 시작 화면 */
         #start-screen {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85); display: flex; flex-direction: column;
+            background: rgba(0,0,0,0.9); display: flex; flex-direction: column;
             justify-content: center; align-items: center; color: white; z-index: 20; pointer-events: auto;
         }
         
@@ -67,7 +67,6 @@
         #btn-fire { bottom: 160px; right: 100px; background: rgba(255,50,50,0.4); border-color: #ff5555; }
         #btn-cam { top: 20px; right: 20px; width: 60px; height: 60px; font-size: 14px; }
 
-        /* 피격 효과 */
         #damage-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, transparent 40%, red 120%); opacity: 0; pointer-events: none; transition: opacity 0.1s; z-index: 5; }
     </style>
 </head>
@@ -93,12 +92,11 @@
     <div id="damage-overlay"></div>
 
     <div id="start-screen">
-        <h1 style="font-size: 40px; margin-bottom: 10px; color:#44ff44;">SYSTEM READY</h1>
-        <p class="blink" style="margin-bottom: 30px;">TAP TRACKPAD TO START</p>
+        <h1 style="font-size: 40px; margin-bottom: 10px; color:#44ff44;">SYSTEM ONLINE</h1>
+        <p class="blink" style="margin-bottom: 30px;">TAP SCREEN TO START</p>
         <div style="text-align: center; color: #aaa; font-size: 14px; line-height: 1.6;">
             [PC] WASD: Move | SPACE: Jump | P: View Mode<br>
-            MOUSE: Aim | TAP/CLICK: Fire<br><br>
-            (Touchpad Tap Supported)
+            MOUSE: Aim | CLICK/TAP: Fire
         </div>
     </div>
 
@@ -115,7 +113,7 @@
     <script type="module">
         import * as THREE from 'three';
 
-        // --- 1. 설정 및 상태 ---
+        // --- 1. 변수 및 설정 ---
         const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
         if (isMobile) {
             document.querySelector('.mobile-controls').style.display = 'block';
@@ -124,20 +122,20 @@
         }
 
         const state = {
-            hp: 100, score: 0, isGameOver: false,
+            hp: 100, score: 0, isGameOver: false, isGameActive: false,
             bossSpawned: false, nextBossScore: 15000,
             bullets: [], enemies: [], obstacles: [], debris: [],
             cameraMode: 'TPS', 
-            cameraRotation: { x: 0, y: Math.PI } 
+            cameraRotation: { x: 0, y: Math.PI }
         };
 
         const input = { w: false, a: false, s: false, d: false, space: false, fire: false, joyX: 0, joyY: 0 };
         const physics = { gravity: -0.018, jump: 0.45 };
 
-        // --- 2. 씬 & 렌더러 ---
+        // --- 2. 씬 구성 ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x0a0a0a); // 약간 더 진한 검정
-        scene.fog = new THREE.FogExp2(0x0a0a0a, 0.015);
+        scene.background = new THREE.Color(0x050505);
+        scene.fog = new THREE.FogExp2(0x050505, 0.02);
 
         const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -146,8 +144,7 @@
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         document.body.appendChild(renderer.domElement);
 
-        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.5);
-        scene.add(hemiLight);
+        scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.5));
         const dirLight = new THREE.DirectionalLight(0xffeedd, 1.2);
         dirLight.position.set(50, 100, 50); dirLight.castShadow = true;
         dirLight.shadow.mapSize.set(2048, 2048);
@@ -157,80 +154,57 @@
         plane.rotation.x = -Math.PI / 2; plane.receiveShadow = true; scene.add(plane);
         scene.add(new THREE.GridHelper(500, 100, 0x444444, 0x111111));
 
-        // --- 3. 객체 생성 (디테일 업그레이드) ---
+        // --- 3. 디테일한 캐릭터 생성 ---
         function createDetailedHumanoid(color, isPlayer, scale = 1) {
             const group = new THREE.Group();
             
-            // 재질 (갑옷 느낌)
             const armorMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.3, metalness: 0.5 });
-            const jointMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 }); // 관절용 검은색
+            const jointMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 });
             const glowMat = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 0.5 });
 
-            // 1. 몸통 (Core)
+            // 1. 상체
             const torsoGroup = new THREE.Group();
             torsoGroup.position.y = 1.1;
             
-            // 가슴 (Chest)
             const chest = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.4, 0.35), armorMat);
             chest.position.y = 0.2; chest.castShadow = true;
-            // 코어 (가슴 중앙 빛나는 부분)
             const core = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.15, 0.05), glowMat);
-            core.position.set(0, 0.2, 0.18);
-            chest.add(core);
+            core.position.set(0, 0.2, 0.18); chest.add(core);
             torsoGroup.add(chest);
 
-            // 배 (Abdomen - 관절)
             const abs = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.25), jointMat);
-            abs.position.y = -0.15; abs.castShadow = true;
-            torsoGroup.add(abs);
+            abs.position.y = -0.15; abs.castShadow = true; torsoGroup.add(abs);
 
-            // 백팩 (Backpack)
             const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, 0.15), armorMat);
-            backpack.position.set(0, 0.1, -0.25);
-            torsoGroup.add(backpack);
-
+            backpack.position.set(0, 0.1, -0.25); torsoGroup.add(backpack);
             group.add(torsoGroup);
 
-            // 2. 머리 (Head)
+            // 2. 머리
             const headGroup = new THREE.Group();
-            headGroup.position.set(0, 0.5, 0); // 몸통 기준 위치
+            headGroup.position.set(0, 0.5, 0);
             const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.35, 0.35), armorMat);
-            headMesh.castShadow = true;
-            headGroup.add(headMesh);
-            // 바이저 (Visor)
+            headMesh.castShadow = true; headGroup.add(headMesh);
             const visor = new THREE.Mesh(new THREE.BoxGeometry(0.33, 0.12, 0.2), glowMat);
-            visor.position.set(0, 0.05, 0.1);
-            headGroup.add(visor);
+            visor.position.set(0, 0.05, 0.1); headGroup.add(visor);
             torsoGroup.add(headGroup);
 
-            // 3. 팔다리 생성 함수
+            // 3. 팔다리
             function createLimb(x, y, isLeg) {
-                const limbGroup = new THREE.Group();
-                limbGroup.position.set(x, y, 0);
+                const root = new THREE.Group(); root.position.set(x, y, 0);
+                
+                const joint = new THREE.Mesh(new THREE.SphereGeometry(isLeg?0.13:0.12), jointMat);
+                root.add(joint);
 
-                // 어깨/고관절 (Joint)
-                const jointGeo = new THREE.SphereGeometry(isLeg ? 0.13 : 0.12);
-                const joint = new THREE.Mesh(jointGeo, jointMat);
-                limbGroup.add(joint);
+                const upper = new THREE.Mesh(new THREE.BoxGeometry(0.16, isLeg?0.45:0.35, 0.16), armorMat);
+                upper.position.y = isLeg?-0.25:-0.2; upper.castShadow = true; joint.add(upper);
 
-                // 상박/허벅지 (Upper)
-                const upperGeo = new THREE.BoxGeometry(0.16, isLeg ? 0.45 : 0.35, 0.16);
-                const upper = new THREE.Mesh(upperGeo, armorMat);
-                upper.position.y = isLeg ? -0.25 : -0.2; upper.castShadow = true;
-                joint.add(upper);
-
-                // 팔꿈치/무릎 (Mid Joint)
                 const midJoint = new THREE.Mesh(new THREE.SphereGeometry(0.11), jointMat);
-                midJoint.position.y = isLeg ? -0.25 : -0.2;
-                upper.add(midJoint);
+                midJoint.position.y = isLeg?-0.25:-0.2; upper.add(midJoint);
 
-                // 하박/종아리 (Lower)
-                const lowerGeo = new THREE.BoxGeometry(0.15, isLeg ? 0.45 : 0.35, 0.15);
-                const lower = new THREE.Mesh(lowerGeo, armorMat);
-                lower.position.y = isLeg ? -0.25 : -0.2; lower.castShadow = true;
-                midJoint.add(lower);
+                const lower = new THREE.Mesh(new THREE.BoxGeometry(0.15, isLeg?0.45:0.35, 0.15), armorMat);
+                lower.position.y = isLeg?-0.25:-0.2; lower.castShadow = true; midJoint.add(lower);
 
-                return { root: limbGroup, upper: joint, lower: midJoint }; // 애니메이션을 위해 관절 반환
+                return { root, upper: joint, lower: midJoint };
             }
 
             const lArm = createLimb(-0.42, 1.45, false);
@@ -241,22 +215,17 @@
             group.add(lArm.root); group.add(rArm.root);
             group.add(lLeg.root); group.add(rLeg.root);
 
-            // 무기
             if (isPlayer) {
                 const gun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.2, 0.6), new THREE.MeshStandardMaterial({color: 0x222222}));
-                gun.position.set(0, -0.2, 0.2);
-                rArm.lower.add(gun); // 하박에 부착
+                gun.position.set(0, -0.2, 0.2); rArm.lower.add(gun);
                 group.userData.gunTip = gun;
             } else {
-                // 적 무기 (장식)
                 const blade = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.05), new THREE.MeshStandardMaterial({color: 0xff3333, emissive: 0x990000}));
-                blade.position.set(0, -0.2, 0.2); blade.rotation.x = Math.PI/2;
-                rArm.lower.add(blade);
+                blade.position.set(0, -0.2, 0.2); blade.rotation.x = Math.PI/2; rArm.lower.add(blade);
                 group.userData.gunTip = blade;
             }
 
             group.userData = {
-                torso: torsoGroup,
                 lArm, rArm, lLeg, rLeg,
                 hp: 100, maxHp: 100, velocity: new THREE.Vector3(), isGrounded: false,
                 boxSize: new THREE.Vector3(0.6 * scale, 1.8 * scale, 0.6 * scale)
@@ -280,54 +249,53 @@
         }
         createObstacles();
 
-        // --- 4. 입력 시스템 (터치패드 및 마우스 수정) ---
+        // --- 4. 입력 및 컨트롤 (발사 로직 수정) ---
         const startScreen = document.getElementById('start-screen');
         
-        // [중요] Pointer Lock 요청
-        function lockPointer() {
+        // 게임 시작 처리
+        startScreen.addEventListener('click', () => { 
+            state.isGameActive = true;
             document.body.requestPointerLock();
-        }
-        startScreen.addEventListener('click', lockPointer);
-        
-        document.addEventListener('pointerlockchange', () => {
-            if (document.pointerLockElement === document.body) startScreen.style.display = 'none';
-            else if (!state.isGameOver) startScreen.style.display = 'flex';
+            startScreen.style.display = 'none';
         });
 
-        // [수정: 상하 반전 해결] 마우스 위(-Y) -> 시야 위(Rotation X 감소) 
-        // 기존 반대로 느끼셨다면, 이제 정방향(Standard FPS)입니다.
-        // movementY > 0 (아래로) -> Rotation X 증가 (아래 봄)
+        // Pointer Lock 해제 시 일시정지 느낌
+        document.addEventListener('pointerlockchange', () => {
+            if (document.pointerLockElement === document.body) {
+                state.isGameActive = true;
+                startScreen.style.display = 'none';
+            } else if (!state.isGameOver) {
+                // state.isGameActive = false; // 일시정지를 원하면 주석 해제
+                startScreen.style.display = 'flex';
+            }
+        });
+
+        // [화면 회전] 마우스 방향 정방향 (위로=위, 오른쪽=오른쪽)
         document.addEventListener('mousemove', (e) => {
             if (document.pointerLockElement === document.body) {
                 state.cameraRotation.y -= e.movementX * 0.002; 
-                state.cameraRotation.x += e.movementY * 0.002; // += 로 변경하여 마우스 방향과 일치시킴
+                state.cameraRotation.x += e.movementY * 0.002; // += 사용 (Mouse Up -> Pitch Up)
                 state.cameraRotation.x = Math.max(-1.4, Math.min(1.4, state.cameraRotation.x));
             }
         });
 
-        // [수정: 터치패드 탭 발사]
-        // 노트북 터치패드 탭은 주로 'click' 이벤트를 발생시킵니다.
-        // 'mousedown'은 물리적 클릭에 더 잘 반응합니다. 둘 다 처리하되 쿨타임 등으로 중복 방지할 수도 있으나,
-        // 여기선 단순화하여 둘 다 연결합니다.
+        // [발사] 조건 완화: 게임이 활성화 상태라면 클릭 시 무조건 발사
         function tryFire() {
-            if (document.pointerLockElement === document.body || isMobile) fireBullet();
+            if (state.isGameActive || isMobile) fireBullet();
         }
-        document.addEventListener('mousedown', tryFire); // 마우스 클릭
-        document.addEventListener('click', (e) => {      // 터치패드 가벼운 탭
-            // startScreen 클릭이 아닐 때만 발사
-            if(startScreen.style.display === 'none') tryFire(); 
+        document.addEventListener('mousedown', tryFire); 
+        document.addEventListener('click', (e) => { 
+            // 시작 화면 클릭과 겹치지 않게 처리
+            if(startScreen.style.display === 'none') tryFire();
         });
 
-        // 키보드
         window.addEventListener('keydown', e => {
-            const k = e.key.toLowerCase();
-            if (input.hasOwnProperty(k)) input[k] = true;
+            const k = e.key.toLowerCase(); if (input.hasOwnProperty(k)) input[k] = true;
             if (e.code === 'Space') input.space = true;
             if (k === 'p') toggleCameraMode();
         });
         window.addEventListener('keyup', e => {
-            const k = e.key.toLowerCase();
-            if (input.hasOwnProperty(k)) input[k] = false;
+            const k = e.key.toLowerCase(); if (input.hasOwnProperty(k)) input[k] = false;
             if (e.code === 'Space') input.space = false;
         });
 
@@ -349,10 +317,10 @@
 
         function toggleCameraMode() {
             state.cameraMode = state.cameraMode === 'TPS' ? 'FPS' : 'TPS';
-            player.visible = (state.cameraMode === 'TPS'); // 1인칭일 때 플레이어 안 보이게
+            player.visible = (state.cameraMode === 'TPS');
         }
 
-        // --- 5. 물리 ---
+        // --- 5. 물리 (벽 통과 방지) ---
         function checkCollision(pos, boxSize) {
             const min = new THREE.Vector3(pos.x - boxSize.x/2, pos.y, pos.z - boxSize.z/2);
             const max = new THREE.Vector3(pos.x + boxSize.x/2, pos.y + boxSize.y, pos.z + boxSize.z/2);
@@ -361,7 +329,7 @@
             return { hit: false };
         }
 
-        // --- 6. 루프 ---
+        // --- 6. 게임 로직 ---
         let boss = null;
         const clock = new THREE.Clock();
 
@@ -382,6 +350,9 @@
                 }
             }
             bullet.position.copy(pos); bullet.lookAt(pos.clone().add(dir));
+            // 총알이 내 몸 안에서 생성되어 즉시 파괴되는 것 방지 (약간 앞으로 이동)
+            bullet.position.add(dir.clone().multiplyScalar(0.5)); 
+            
             state.bullets.push({ mesh: bullet, velocity: dir.multiplyScalar(isEnemy ? 0.6 : 2.5), life: 100, isEnemy });
             scene.add(bullet);
         }
