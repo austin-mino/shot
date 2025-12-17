@@ -491,7 +491,7 @@ if (fireCooldown > 0) fireCooldown--;
                         }
                         if(!hit && boss && boss.position.distanceTo(b.mesh.position) < 4) {
                             boss.userData.hp -= 20; hit=true; spawnDebris(b.mesh.position, 0xff0000); document.getElementById('boss-hp-fill').style.width = (boss.userData.hp/boss.userData.maxHp*100)+'%';
-                            if(boss.userData.hp<=0) { scene.remove(boss); boss=null; state.bossSpawned=false; document.getElementById('boss-ui').style.display='none'; state.score+=5000; spawnDebris(b.mesh.position, 0xffaa00); }
+                            if(boss.userData.hp<=0) { scene.remove(boss); boss=null; state.bossSpawned=false; document.getElementById('boss-ui').style.display='none'; spawnDebris(b.mesh.position, 0xffaa00); }
                         }
                     }
                 }
