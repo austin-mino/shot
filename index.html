@@ -445,6 +445,11 @@ if (isMobile) {
     boss.userData.phase = 1;
     boss.userData.lastPhase = 0;
 
+       boss.userData.meleeCooldown = 0;
+boss.userData.meleeRange = 3.5;
+boss.userData.meleeDamage = 12;
+
+
     // 보스 타입 랜덤
     const types = ['tank', 'rush', 'summoner'];
     boss.userData.type = types[Math.floor(Math.random() * types.length)];
@@ -638,6 +643,39 @@ if (boss) {
                 } else e.position.y = 0;
 if (e === boss) {
     e.userData.attackTimer += dt;
+// ============================
+// 👊 BOSS MELEE ATTACK
+// ============================
+    const distToPlayer = e.position.distanceTo(player.position);
+
+    if (distToPlayer < e.userData.meleeRange) {
+        e.userData.meleeCooldown -= dt;
+
+        if (e.userData.meleeCooldown <= 0) {
+            // 💥 데미지
+            state.hp -= e.userData.meleeDamage * e.userData.phase;
+const knockDir = new THREE.Vector3()
+    .subVectors(player.position, e.position)
+    .normalize()
+    .multiplyScalar(0.8);
+player.position.add(knockDir);
+
+            // 피격 연출
+            const overlay = document.getElementById('damage-overlay');
+            overlay.style.opacity = 0.7;
+            setTimeout(() => overlay.style.opacity = 0, 200);
+
+            // 쿨타임 리셋
+            e.userData.meleeCooldown = 1.2;
+
+            // 간단한 타격 모션
+            e.userData.rArm.root.rotation.x = -1.5;
+            setTimeout(() => {
+                e.userData.rArm.root.rotation.x = 0;
+            }, 200);
+        }
+    }
+}
 
     const phase = e.userData.phase;
     const type = e.userData.type;
