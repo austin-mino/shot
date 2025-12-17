@@ -76,7 +76,12 @@
         </div>
         
         <div id="boss-msg">⚠ WARNING: BOSS DETECTED ⚠</div>
-        <div id="boss-ui"><div id="boss-hp-fill"></div></div>
+        <div id="boss-ui"><div id="boss-hp-fill"></div><div id="boss-phase"
+     style="position:absolute; width:100%; text-align:center;
+            color:white; font-weight:bold; line-height:25px;">
+    PHASE 1
+</div>
+</div>
 
         <div class="mobile-controls">
             <div id="joystick-zone"><div id="joystick-knob"></div></div>
@@ -389,6 +394,33 @@ if (isMobile) {
     });
 }
 
+        function applyBossAppearance(boss) {
+    let color;
+
+    switch (boss.userData.type) {
+        case 'tank':      // 🔴 무거운 보스
+            color = 0xaa2222;
+            break;
+        case 'rush':      // ⚡ 빠른 보스
+            color = 0x22aaff;
+            break;
+        case 'summoner':  // 🧠 소환형
+            color = 0xaa22ff;
+            break;
+        default:
+            color = 0xff0000;
+    }
+
+    boss.traverse(obj => {
+        if (obj.isMesh && obj.material) {
+            obj.material = obj.material.clone();
+            obj.material.color.set(color);
+            obj.material.emissive = new THREE.Color(color);
+            obj.material.emissiveIntensity = 0.4;
+        }
+    });
+}
+
 
      function spawnBoss() {
     state.bossSpawned = true;
@@ -409,6 +441,7 @@ if (isMobile) {
     // 🎲 보스 타입 랜덤
     const types = ['tank', 'rush', 'summoner'];
     boss.userData.type = types[Math.floor(Math.random() * types.length)];
+    applyBossAppearance(boss);
 
     scene.add(boss);
 
@@ -530,6 +563,30 @@ if (boss) {
     if (hpRate <= 0.3) boss.userData.phase = 3;
     else if (hpRate <= 0.7) boss.userData.phase = 2;
     else boss.userData.phase = 1;
+}
+if (boss) {
+    if (boss.userData.lastPhase !== boss.userData.phase) {
+        boss.userData.lastPhase = boss.userData.phase;
+
+        // UI 텍스트
+        document.getElementById('boss-phase').innerText =
+            `PHASE ${boss.userData.phase}`;
+
+        // 체력바 색상 변경
+        const fill = document.getElementById('boss-hp-fill');
+        fill.style.background =
+            boss.userData.phase === 1
+                ? 'linear-gradient(90deg, #ff5555, #ff2222)'
+                : boss.userData.phase === 2
+                ? 'linear-gradient(90deg, #ffaa00, #ff7700)'
+                : 'linear-gradient(90deg, #aa00ff, #ff00aa)';
+
+        // ⚠ 페이즈 전환 메시지
+        const msg = document.getElementById('boss-msg');
+        msg.innerText = `⚠ PHASE ${boss.userData.phase} ⚠`;
+        msg.style.display = 'block';
+        setTimeout(() => msg.style.display = 'none', 1500);
+    }
 }
 
 
