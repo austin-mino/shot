@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>shot</title>
+    <title>Final</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; user-select: none; touch-action: none; font-family: 'Segoe UI', sans-serif; }
         
@@ -89,7 +89,7 @@
     <div id="damage-overlay"></div>
 
     <div id="start-screen">
-        <h1 style="font-size: 40px; margin-bottom: 10px; color:#44ff44;">SYSTEM READY</h1>
+        <h1 style="font-size: 40px; margin-bottom: 10px; color:#44ff44;">SYSTEM V10 READY</h1>
         <p class="blink" style="margin-bottom: 30px;">TAP SCREEN TO START</p>
         <div style="text-align: center; color: #aaa; font-size: 14px; line-height: 1.6;">
             [PC] WASD: Move | SPACE: Jump | P: View Mode<br>
@@ -110,6 +110,9 @@
 
     <script type="module">
         import * as THREE from 'three';
+
+        let isFiring = false;
+        let fireCooldown = 0;
 
         // --- 1. 설정 및 상태 ---
         const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -266,10 +269,23 @@
 
         // [핵심] 발사 (PointerDown 이벤트로 통합 - 터치패드/클릭 모두 대응)
        document.addEventListener('pointerdown', () => {
-    if (state.isGameActive || isMobile) {
-        fireBullet();
-    }
+    if (state.isGameActive || isMobile) isFiring = true;
 });
+document.addEventListener('pointerup', () => {
+    isFiring = false;
+});
+
+
+        window.addEventListener('keydown', e => {
+    const k = e.key.toLowerCase();
+    if (k === 'f') isFiring = true;
+});
+
+window.addEventListener('keyup', e => {
+    const k = e.key.toLowerCase();
+    if (k === 'f') isFiring = false;
+});
+
 
 
         window.addEventListener('keydown', e => {
@@ -295,8 +311,16 @@
         }
         document.getElementById('btn-jump').addEventListener('touchstart', e=>{e.preventDefault(); input.space=true;});
         document.getElementById('btn-jump').addEventListener('touchend', e=>{e.preventDefault(); input.space=false;});
-        document.getElementById('btn-fire').addEventListener('touchstart', e=>{e.preventDefault(); fireBullet();});
         document.getElementById('btn-cam').addEventListener('touchstart', e=>{e.preventDefault(); toggleCameraMode();});
+        document.getElementById('btn-fire').addEventListener('touchstart', e=>{
+    e.preventDefault();
+    isFiring = true;
+});
+document.getElementById('btn-fire').addEventListener('touchend', e=>{
+    e.preventDefault();
+    isFiring = false;
+});
+
 
         function toggleCameraMode() {
             state.cameraMode = state.cameraMode === 'TPS' ? 'FPS' : 'TPS';
@@ -317,7 +341,7 @@
         const clock = new THREE.Clock();
         const raycaster = new THREE.Raycaster();
 
-    function fireBullet(isEnemy = false, origin = null, direction = null) {
+        function fireBullet(isEnemy = false, origin = null, direction = null) {
     const color = isEnemy ? 0xff0000 : 0xffff00;
     const bullet = new THREE.Mesh(
         new THREE.BoxGeometry(0.08, 0.08, 0.6),
@@ -332,22 +356,43 @@
         pos.copy(origin);
         dir.copy(direction).normalize();
     } else {
-        // ===== 플레이어 발사 =====
+       // ===== 플레이어 발사 =====
+pos.copy(player.position).add(new THREE.Vector3(0, 1.5, 0));
 
-        // 총알 시작 위치: 플레이어 머리 근처
-        pos.copy(player.position).add(new THREE.Vector3(0, 1.5, 0));
+// 가장 가까운 적 찾기
+let target = null;
+let minDist = Infinity;
 
-        if (isMobile) {
-            // 모바일: 플레이어가 보는 방향
-            dir.set(0, 0, -1).applyAxisAngle(
-                new THREE.Vector3(0, 1, 0),
-                player.rotation.y
-            );
-        } else {
-            // PC: 화면 중앙 레이캐스트
-            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-            dir.copy(raycaster.ray.direction).normalize();
-        }
+const candidates = [...state.enemies];
+if (boss) candidates.push(boss);
+
+candidates.forEach(e => {
+    const d = e.position.distanceTo(player.position);
+    if (d < minDist) {
+        minDist = d;
+        target = e;
+    }
+});
+
+if (target && (isMobile || minDist < 30)) {
+    // 📌 자동 에임 (가까운 적)
+    dir.subVectors(
+        target.position.clone().add(new THREE.Vector3(0, 1.5, 0)),
+        pos
+    ).normalize();
+} else {
+    // 기본 조준
+    if (isMobile) {
+        dir.set(0, 0, -1).applyAxisAngle(
+            new THREE.Vector3(0, 1, 0),
+            player.rotation.y
+        );
+    } else {
+        raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+        dir.copy(raycaster.ray.direction).normalize();
+    }
+}
+
     }
 
     bullet.position.copy(pos);
@@ -382,6 +427,15 @@
         }
 
         function animate() {
+
+            // 연사 처리
+if (isFiring && fireCooldown <= 0) {
+    fireBullet();
+    fireCooldown = 6; // 작을수록 연사 빠름
+}
+if (fireCooldown > 0) fireCooldown--;
+
+            
             requestAnimationFrame(animate);
             if (state.isGameOver) return;
             const dt = clock.getDelta();
