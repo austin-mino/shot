@@ -356,42 +356,22 @@ document.getElementById('btn-fire').addEventListener('touchend', e=>{
         pos.copy(origin);
         dir.copy(direction).normalize();
     } else {
-       // ===== 플레이어 발사 =====
+      
+// ===== 플레이어 발사 =====
 pos.copy(player.position).add(new THREE.Vector3(0, 1.5, 0));
 
-// 가장 가까운 적 찾기
-let target = null;
-let minDist = Infinity;
-
-const candidates = [...state.enemies];
-if (boss) candidates.push(boss);
-
-candidates.forEach(e => {
-    const d = e.position.distanceTo(player.position);
-    if (d < minDist) {
-        minDist = d;
-        target = e;
-    }
-});
-
-if (target && (isMobile || minDist < 30)) {
-    // 📌 자동 에임 (가까운 적)
-    dir.subVectors(
-        target.position.clone().add(new THREE.Vector3(0, 1.5, 0)),
-        pos
-    ).normalize();
+if (isMobile) {
+    // 모바일: 캐릭터가 바라보는 방향으로 발사
+    dir.set(0, 0, -1).applyAxisAngle(
+        new THREE.Vector3(0, 1, 0),
+        player.rotation.y
+    );
 } else {
-    // 기본 조준
-    if (isMobile) {
-        dir.set(0, 0, -1).applyAxisAngle(
-            new THREE.Vector3(0, 1, 0),
-            player.rotation.y
-        );
-    } else {
-        raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-        dir.copy(raycaster.ray.direction).normalize();
-    }
+    // PC: 크로스헤어 정중앙 (완전 수동 조준)
+    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+    dir.copy(raycaster.ray.direction).normalize();
 }
+
 
     }
 
