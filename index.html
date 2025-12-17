@@ -422,40 +422,54 @@ if (isMobile) {
 }
 
 
-     function spawnBoss() {
-    state.bossSpawned = true;
-    boss.userData.lastPhase = 0;
-document.getElementById('boss-phase').innerText = 'PHASE 1';
+   function spawnBoss() {
+    // 이미 보스 있으면 중복 방지
+    if (state.bossSpawned) return;
 
+    state.bossSpawned = true;
+
+    // 보스 생성
     boss = createDetailedHumanoid(0xff0000, false, 5);
+
+    // 기본 위치
     boss.position.set(
         player.position.x + 40,
         10,
         player.position.z + 40
     );
 
-    // 🔥 보스 기본 데이터
+    // 보스 스탯
     boss.userData.hp = 3000;
     boss.userData.maxHp = 3000;
     boss.userData.attackTimer = 0;
     boss.userData.phase = 1;
+    boss.userData.lastPhase = 0;
 
-    // 🎲 보스 타입 랜덤
+    // 보스 타입 랜덤
     const types = ['tank', 'rush', 'summoner'];
     boss.userData.type = types[Math.floor(Math.random() * types.length)];
+
+    // 외형 적용
     applyBossAppearance(boss);
 
+    // 씬 추가
     scene.add(boss);
 
+    // ===== UI =====
     document.getElementById('boss-ui').style.display = 'block';
-    document.getElementById('boss-msg').innerText =
-        `⚠ ${boss.userData.type.toUpperCase()} BOSS ⚠`;
-    document.getElementById('boss-msg').style.display = 'block';
+    document.getElementById('boss-hp-fill').style.width = '100%';
+
+    document.getElementById('boss-phase').innerText = 'PHASE 1';
+
+    const msg = document.getElementById('boss-msg');
+    msg.innerText = `⚠ ${boss.userData.type.toUpperCase()} BOSS ⚠`;
+    msg.style.display = 'block';
 
     setTimeout(() => {
-        document.getElementById('boss-msg').style.display = 'none';
+        msg.style.display = 'none';
     }, 3000);
 }
+
 
 
         function spawnDebris(pos, color) {
