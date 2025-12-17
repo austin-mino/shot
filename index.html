@@ -424,6 +424,8 @@ if (isMobile) {
 
      function spawnBoss() {
     state.bossSpawned = true;
+    boss.userData.lastPhase = 0;
+document.getElementById('boss-phase').innerText = 'PHASE 1';
 
     boss = createDetailedHumanoid(0xff0000, false, 5);
     boss.position.set(
@@ -553,7 +555,11 @@ if (fireCooldown > 0) fireCooldown--;
                         }
                     }
                 }
-                if((hit || b.life<=0) && !hit) { scene.remove(b.mesh); state.bullets.splice(i,1); } else if(hit && state.bullets[i]===b) { scene.remove(b.mesh); state.bullets.splice(i,1); }
+                if (hit || b.life <= 0) {
+    scene.remove(b.mesh);
+    state.bullets.splice(i, 1);
+}
+
             }
 
             // ===== 보스 페이즈 판정 =====
@@ -650,7 +656,14 @@ if (e === boss) {
                 .subVectors(player.position, e.position)
                 .normalize();
 
-            e.position.add(dir.multiplyScalar(phase * 3));
+            const rushMove = dir.multiplyScalar(phase * 3);
+const oldPos = e.position.clone();
+e.position.add(rushMove);
+
+if (checkCollision(e.position, e.userData.boxSize).hit) {
+    e.position.copy(oldPos);
+}
+
         }
 
         // ======================
