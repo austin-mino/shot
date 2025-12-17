@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Final Android Shooter v7.0</title>
+    <title>Final Android Shooter v8.0 (Detailed & Fixed)</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; user-select: none; touch-action: none; font-family: 'Segoe UI', sans-serif; }
         
@@ -16,7 +16,7 @@
             transition: opacity 0.2s;
         }
         #crosshair::before, #crosshair::after {
-            content: ''; position: absolute; background: rgba(0, 255, 100, 0.9); box-shadow: 0 0 4px #0f0;
+            content: ''; position: absolute; background: rgba(0, 255, 100, 0.9); box-shadow: 0 0 5px #0f0;
         }
         #crosshair::before { top: 11px; left: 0; width: 24px; height: 2px; }
         #crosshair::after { top: 0; left: 11px; width: 2px; height: 24px; }
@@ -94,11 +94,11 @@
 
     <div id="start-screen">
         <h1 style="font-size: 40px; margin-bottom: 10px; color:#44ff44;">SYSTEM READY</h1>
-        <p class="blink" style="margin-bottom: 30px;">TAP / CLICK TO START</p>
+        <p class="blink" style="margin-bottom: 30px;">TAP TRACKPAD TO START</p>
         <div style="text-align: center; color: #aaa; font-size: 14px; line-height: 1.6;">
             [PC] WASD: Move | SPACE: Jump | P: View Mode<br>
             MOUSE: Aim | TAP/CLICK: Fire<br><br>
-            (Laptop Trackpad Supported)
+            (Touchpad Tap Supported)
         </div>
     </div>
 
@@ -136,8 +136,8 @@
 
         // --- 2. 씬 & 렌더러 ---
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x050505);
-        scene.fog = new THREE.FogExp2(0x050505, 0.02);
+        scene.background = new THREE.Color(0x0a0a0a); // 약간 더 진한 검정
+        scene.fog = new THREE.FogExp2(0x0a0a0a, 0.015);
 
         const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -146,9 +146,9 @@
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         document.body.appendChild(renderer.domElement);
 
-        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.4);
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.5);
         scene.add(hemiLight);
-        const dirLight = new THREE.DirectionalLight(0xffeedd, 1.5);
+        const dirLight = new THREE.DirectionalLight(0xffeedd, 1.2);
         dirLight.position.set(50, 100, 50); dirLight.castShadow = true;
         dirLight.shadow.mapSize.set(2048, 2048);
         scene.add(dirLight);
@@ -157,56 +157,121 @@
         plane.rotation.x = -Math.PI / 2; plane.receiveShadow = true; scene.add(plane);
         scene.add(new THREE.GridHelper(500, 100, 0x444444, 0x111111));
 
-        // --- 3. 객체 생성 ---
-        function createHumanoid(color, isPlayer, scale = 1) {
+        // --- 3. 객체 생성 (디테일 업그레이드) ---
+        function createDetailedHumanoid(color, isPlayer, scale = 1) {
             const group = new THREE.Group();
-            const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.3 });
-            const darkMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
-
-            const torso = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.3), mat);
-            torso.position.y = 1.15; torso.castShadow = true; group.add(torso);
             
-            const head = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), mat);
-            head.position.y = 0.6; torso.add(head);
-            const eye = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.1, 0.1), new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x00ffff }));
-            eye.position.set(0, 0.05, 0.15); head.add(eye);
+            // 재질 (갑옷 느낌)
+            const armorMat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.3, metalness: 0.5 });
+            const jointMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 }); // 관절용 검은색
+            const glowMat = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 0.5 });
 
-            const createLimb = (x, y, isLeg) => {
-                const g = new THREE.Group(); g.position.set(x, y, 0);
-                const limb = new THREE.Mesh(new THREE.BoxGeometry(0.18, isLeg?0.8:0.7, 0.18), mat);
-                limb.position.y = isLeg ? -0.4 : -0.35; limb.castShadow = true; g.add(limb);
-                const joint = new THREE.Mesh(new THREE.SphereGeometry(0.12), darkMat);
-                g.add(joint); group.add(g); return g;
-            };
+            // 1. 몸통 (Core)
+            const torsoGroup = new THREE.Group();
+            torsoGroup.position.y = 1.1;
             
+            // 가슴 (Chest)
+            const chest = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.4, 0.35), armorMat);
+            chest.position.y = 0.2; chest.castShadow = true;
+            // 코어 (가슴 중앙 빛나는 부분)
+            const core = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.15, 0.05), glowMat);
+            core.position.set(0, 0.2, 0.18);
+            chest.add(core);
+            torsoGroup.add(chest);
+
+            // 배 (Abdomen - 관절)
+            const abs = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.25), jointMat);
+            abs.position.y = -0.15; abs.castShadow = true;
+            torsoGroup.add(abs);
+
+            // 백팩 (Backpack)
+            const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, 0.15), armorMat);
+            backpack.position.set(0, 0.1, -0.25);
+            torsoGroup.add(backpack);
+
+            group.add(torsoGroup);
+
+            // 2. 머리 (Head)
+            const headGroup = new THREE.Group();
+            headGroup.position.set(0, 0.5, 0); // 몸통 기준 위치
+            const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.35, 0.35), armorMat);
+            headMesh.castShadow = true;
+            headGroup.add(headMesh);
+            // 바이저 (Visor)
+            const visor = new THREE.Mesh(new THREE.BoxGeometry(0.33, 0.12, 0.2), glowMat);
+            visor.position.set(0, 0.05, 0.1);
+            headGroup.add(visor);
+            torsoGroup.add(headGroup);
+
+            // 3. 팔다리 생성 함수
+            function createLimb(x, y, isLeg) {
+                const limbGroup = new THREE.Group();
+                limbGroup.position.set(x, y, 0);
+
+                // 어깨/고관절 (Joint)
+                const jointGeo = new THREE.SphereGeometry(isLeg ? 0.13 : 0.12);
+                const joint = new THREE.Mesh(jointGeo, jointMat);
+                limbGroup.add(joint);
+
+                // 상박/허벅지 (Upper)
+                const upperGeo = new THREE.BoxGeometry(0.16, isLeg ? 0.45 : 0.35, 0.16);
+                const upper = new THREE.Mesh(upperGeo, armorMat);
+                upper.position.y = isLeg ? -0.25 : -0.2; upper.castShadow = true;
+                joint.add(upper);
+
+                // 팔꿈치/무릎 (Mid Joint)
+                const midJoint = new THREE.Mesh(new THREE.SphereGeometry(0.11), jointMat);
+                midJoint.position.y = isLeg ? -0.25 : -0.2;
+                upper.add(midJoint);
+
+                // 하박/종아리 (Lower)
+                const lowerGeo = new THREE.BoxGeometry(0.15, isLeg ? 0.45 : 0.35, 0.15);
+                const lower = new THREE.Mesh(lowerGeo, armorMat);
+                lower.position.y = isLeg ? -0.25 : -0.2; lower.castShadow = true;
+                midJoint.add(lower);
+
+                return { root: limbGroup, upper: joint, lower: midJoint }; // 애니메이션을 위해 관절 반환
+            }
+
+            const lArm = createLimb(-0.42, 1.45, false);
+            const rArm = createLimb(0.42, 1.45, false);
+            const lLeg = createLimb(-0.22, 0.8, true);
+            const rLeg = createLimb(0.22, 0.8, true);
+
+            group.add(lArm.root); group.add(rArm.root);
+            group.add(lLeg.root); group.add(rLeg.root);
+
+            // 무기
+            if (isPlayer) {
+                const gun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.2, 0.6), new THREE.MeshStandardMaterial({color: 0x222222}));
+                gun.position.set(0, -0.2, 0.2);
+                rArm.lower.add(gun); // 하박에 부착
+                group.userData.gunTip = gun;
+            } else {
+                // 적 무기 (장식)
+                const blade = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.05), new THREE.MeshStandardMaterial({color: 0xff3333, emissive: 0x990000}));
+                blade.position.set(0, -0.2, 0.2); blade.rotation.x = Math.PI/2;
+                rArm.lower.add(blade);
+                group.userData.gunTip = blade;
+            }
+
             group.userData = {
-                torso,
-                lArm: createLimb(-0.4, 1.45, false), rArm: createLimb(0.4, 1.45, false),
-                lLeg: createLimb(-0.2, 0.8, true), rLeg: createLimb(0.2, 0.8, true),
+                torso: torsoGroup,
+                lArm, rArm, lLeg, rLeg,
                 hp: 100, maxHp: 100, velocity: new THREE.Vector3(), isGrounded: false,
                 boxSize: new THREE.Vector3(0.6 * scale, 1.8 * scale, 0.6 * scale)
             };
-
-            if (isPlayer) {
-                const gun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.6), darkMat);
-                gun.position.set(0, -0.35, 0.4); group.userData.rArm.add(gun);
-                group.userData.gunTip = gun;
-            } else {
-                const blade = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.1), new THREE.MeshStandardMaterial({color:0xff0000, emissive:0x550000}));
-                blade.position.set(0, -0.4, 0.2); blade.rotation.x = Math.PI/2; group.userData.rArm.add(blade);
-                group.userData.gunTip = blade;
-            }
 
             group.scale.set(scale, scale, scale);
             return group;
         }
 
-        const player = createHumanoid(0x0088ff, true);
+        const player = createDetailedHumanoid(0x0088ff, true);
         scene.add(player);
 
         function createObstacles() {
             for (let i = 0; i < 50; i++) {
-                const w = 3 + Math.random() * 5; const h = 2 + Math.random() * 6; const d = 3 + Math.random() * 5;
+                const w = 3 + Math.random() * 5; const h = 3 + Math.random() * 6; const d = 3 + Math.random() * 5;
                 const obs = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: 0x555566 }));
                 let x, z; do { x = (Math.random()-0.5)*300; z = (Math.random()-0.5)*300; } while(Math.sqrt(x*x+z*z) < 20);
                 obs.position.set(x, h/2, z); obs.castShadow = true; obs.receiveShadow = true;
@@ -215,29 +280,43 @@
         }
         createObstacles();
 
-        // --- 4. 입력 시스템 ---
+        // --- 4. 입력 시스템 (터치패드 및 마우스 수정) ---
         const startScreen = document.getElementById('start-screen');
-        startScreen.addEventListener('click', () => { document.body.requestPointerLock(); });
+        
+        // [중요] Pointer Lock 요청
+        function lockPointer() {
+            document.body.requestPointerLock();
+        }
+        startScreen.addEventListener('click', lockPointer);
         
         document.addEventListener('pointerlockchange', () => {
             if (document.pointerLockElement === document.body) startScreen.style.display = 'none';
             else if (!state.isGameOver) startScreen.style.display = 'flex';
         });
 
-        // [수정 1] 마우스 회전 방향 표준화 (Mouse Right -> Look Right)
+        // [수정: 상하 반전 해결] 마우스 위(-Y) -> 시야 위(Rotation X 감소) 
+        // 기존 반대로 느끼셨다면, 이제 정방향(Standard FPS)입니다.
+        // movementY > 0 (아래로) -> Rotation X 증가 (아래 봄)
         document.addEventListener('mousemove', (e) => {
             if (document.pointerLockElement === document.body) {
-                // e.movementX가 양수(오른쪽)일 때, 회전각은 감소해야 함 (Three.js 좌표계 특성상)
-                // - 값을 사용하여 마우스 이동 방향과 시야를 일치시킴
                 state.cameraRotation.y -= e.movementX * 0.002; 
-                state.cameraRotation.x -= e.movementY * 0.002;
+                state.cameraRotation.x += e.movementY * 0.002; // += 로 변경하여 마우스 방향과 일치시킴
                 state.cameraRotation.x = Math.max(-1.4, Math.min(1.4, state.cameraRotation.x));
             }
         });
 
-        function triggerFire() { if (document.pointerLockElement === document.body || isMobile) fireBullet(); }
-        document.addEventListener('mousedown', triggerFire);
-        document.addEventListener('click', triggerFire); // 노트북 터치패드 탭 지원
+        // [수정: 터치패드 탭 발사]
+        // 노트북 터치패드 탭은 주로 'click' 이벤트를 발생시킵니다.
+        // 'mousedown'은 물리적 클릭에 더 잘 반응합니다. 둘 다 처리하되 쿨타임 등으로 중복 방지할 수도 있으나,
+        // 여기선 단순화하여 둘 다 연결합니다.
+        function tryFire() {
+            if (document.pointerLockElement === document.body || isMobile) fireBullet();
+        }
+        document.addEventListener('mousedown', tryFire); // 마우스 클릭
+        document.addEventListener('click', (e) => {      // 터치패드 가벼운 탭
+            // startScreen 클릭이 아닐 때만 발사
+            if(startScreen.style.display === 'none') tryFire(); 
+        });
 
         // 키보드
         window.addEventListener('keydown', e => {
@@ -252,7 +331,7 @@
             if (e.code === 'Space') input.space = false;
         });
 
-        // 모바일 컨트롤
+        // 모바일
         const joy = { zone: document.getElementById('joystick-zone'), knob: document.getElementById('joystick-knob'), id: null, cx:0, cy:0 };
         joy.zone.addEventListener('touchstart', e => { e.preventDefault(); const t = e.changedTouches[0]; joy.id = t.identifier; const r = joy.zone.getBoundingClientRect(); joy.cx = r.left+r.width/2; joy.cy = r.top+r.height/2; updateJoy(t.clientX, t.clientY); });
         joy.zone.addEventListener('touchmove', e => { e.preventDefault(); for(let t of e.changedTouches) if(t.identifier===joy.id) updateJoy(t.clientX, t.clientY); });
@@ -268,13 +347,12 @@
         document.getElementById('btn-fire').addEventListener('touchstart', e=>{e.preventDefault(); fireBullet();});
         document.getElementById('btn-cam').addEventListener('touchstart', e=>{e.preventDefault(); toggleCameraMode();});
 
-        // [수정 2] 카메라 모드 토글 시 플레이어 숨김 처리
         function toggleCameraMode() {
             state.cameraMode = state.cameraMode === 'TPS' ? 'FPS' : 'TPS';
-            player.visible = (state.cameraMode === 'TPS'); // TPS일 때만 보임
+            player.visible = (state.cameraMode === 'TPS'); // 1인칭일 때 플레이어 안 보이게
         }
 
-        // --- 5. 물리 (벽 통과 방지) ---
+        // --- 5. 물리 ---
         function checkCollision(pos, boxSize) {
             const min = new THREE.Vector3(pos.x - boxSize.x/2, pos.y, pos.z - boxSize.z/2);
             const max = new THREE.Vector3(pos.x + boxSize.x/2, pos.y + boxSize.y, pos.z + boxSize.z/2);
@@ -283,7 +361,7 @@
             return { hit: false };
         }
 
-        // --- 6. 게임 로직 ---
+        // --- 6. 루프 ---
         let boss = null;
         const clock = new THREE.Clock();
 
@@ -293,7 +371,6 @@
             let pos, dir;
             if (origin && direction) { pos = origin.clone(); dir = direction.clone(); } 
             else {
-                // 플레이어가 쏠 때: 플레이어가 숨겨져 있어도(visible=false), 위치 정보는 계속 갱신되므로 getWorldPosition은 정상 작동함
                 pos = new THREE.Vector3(); player.userData.gunTip.getWorldPosition(pos);
                 if (isMobile) {
                     let target = boss || null;
@@ -311,7 +388,7 @@
 
         function spawnBoss() {
             state.bossSpawned = true;
-            boss = createHumanoid(0xff0000, false, 5); boss.position.set(player.position.x + 40, 10, player.position.z + 40);
+            boss = createDetailedHumanoid(0xff0000, false, 5); boss.position.set(player.position.x + 40, 10, player.position.z + 40);
             boss.userData.hp = 3000; boss.userData.maxHp = 3000; boss.userData.attackTimer = 0; scene.add(boss);
             document.getElementById('boss-ui').style.display = 'block'; document.getElementById('boss-msg').style.display = 'block';
             setTimeout(() => document.getElementById('boss-msg').style.display = 'none', 3000);
@@ -389,7 +466,7 @@
 
             if(state.score >= state.nextBossScore && !state.bossSpawned) { spawnBoss(); state.nextBossScore += 15000; }
             if(!boss && state.enemies.length < 15 && Math.random() < 0.03) {
-                const e = createHumanoid(0xff4444, false); const a = Math.random()*6.28; const r = 30+Math.random()*20;
+                const e = createDetailedHumanoid(0xff4444, false); const a = Math.random()*6.28; const r = 30+Math.random()*20;
                 e.position.set(player.position.x+Math.cos(a)*r, 10, player.position.z+Math.sin(a)*r); scene.add(e); state.enemies.push(e);
             }
 
@@ -411,13 +488,14 @@
                     if(e.userData.attackTimer > 2.0) {
                         e.userData.attackTimer = 0; const pattern = Math.random();
                         if(pattern < 0.5) { for(let k=0; k<12; k++) { const angle = (Math.PI*2/12)*k; fireBullet(true, e.position.clone().add(new THREE.Vector3(0,3,0)), new THREE.Vector3(Math.cos(angle),0,Math.sin(angle))); } } 
-                        else { const minion = createHumanoid(0xff8888, false); minion.position.copy(e.position).add(new THREE.Vector3((Math.random()-0.5)*5, 0, (Math.random()-0.5)*5)); scene.add(minion); state.enemies.push(minion); }
+                        else { const minion = createDetailedHumanoid(0xff8888, false); minion.position.copy(e.position).add(new THREE.Vector3((Math.random()-0.5)*5, 0, (Math.random()-0.5)*5)); scene.add(minion); state.enemies.push(minion); }
                     }
                 } else {
                     if(dist < 1.2) { state.hp -= 0.5; document.getElementById('damage-overlay').style.opacity = 0.3; }
                 }
                 const anim = time * (e===boss?4:10);
-                e.userData.lLeg.rotation.x = Math.sin(anim); e.userData.rLeg.rotation.x = -Math.sin(anim);
+                e.userData.lArm.root.rotation.x = -Math.sin(anim); e.userData.rArm.root.rotation.x = Math.sin(anim);
+                e.userData.lLeg.root.rotation.x = Math.sin(anim); e.userData.rLeg.root.rotation.x = -Math.sin(anim);
             });
 
             if(state.hp <= 0) { state.isGameOver = true; document.getElementById('game-over').style.display = 'flex'; document.getElementById('final-score').innerText = state.score; document.exitPointerLock(); }
@@ -427,8 +505,8 @@
             
             if(input.w||input.s||input.a||input.d || (isMobile&&(input.joyX||input.joyY))) {
                 const at = time * 15;
-                player.userData.lLeg.rotation.x = Math.sin(at); player.userData.rLeg.rotation.x = -Math.sin(at);
-                player.userData.lArm.rotation.x = -Math.sin(at); player.userData.rArm.rotation.x = Math.sin(at);
+                player.userData.lArm.root.rotation.x = -Math.sin(at); player.userData.rArm.root.rotation.x = Math.sin(at);
+                player.userData.lLeg.root.rotation.x = Math.sin(at); player.userData.rLeg.root.rotation.x = -Math.sin(at);
             }
             renderer.render(scene, camera);
         }
