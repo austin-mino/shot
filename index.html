@@ -1,315 +1,555 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <title>Final Android Shooter</title>
-    <style>
-        body { margin: 0; overflow: hidden; background-color: #111; user-select: none; }
-        
-        /* HUD (헤드업 디스플레이) 스타일 */
-        #ui-layer {
-            position: absolute; top: 20px; left: 20px; width: 100%;
-            pointer-events: none; z-index: 10;
-        }
-        .stat-box {
-            display: inline-block; background: rgba(0, 0, 0, 0.6);
-            color: white; padding: 10px 20px; border-radius: 8px;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            font-size: 20px; font-weight: bold; margin-right: 10px;
-            border: 1px solid rgba(255,255,255,0.2);
-        }
-        #hp-bar { color: #ff4444; }
-        #score-bar { color: #44ff44; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Final Android Shooter v5.0</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; user-select: none; touch-action: none; font-family: 'Segoe UI', sans-serif; }
+        
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+        
+        /* 크로스헤어 */
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; width: 24px; height: 24px;
+            transform: translate(-50%, -50%); pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        #crosshair::before, #crosshair::after {
+            content: ''; position: absolute; background: rgba(0, 255, 100, 0.9); box-shadow: 0 0 4px #0f0;
+        }
+        #crosshair::before { top: 11px; left: 0; width: 24px; height: 2px; }
+        #crosshair::after { top: 0; left: 11px; width: 2px; height: 24px; }
 
-        /* 게임 오버 화면 */
-        #game-over {
-            display: none; /* 평소에는 숨김 */
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.85);
-            display: flex; flex-direction: column;
-            justify-content: center; align-items: center;
-            z-index: 100;
-        }
-        h1 { color: #ff3333; font-size: 80px; margin: 0; font-family: sans-serif; text-shadow: 0 0 20px red; }
-        p { color: white; font-size: 30px; font-family: sans-serif; margin: 20px 0; }
-        button {
-            padding: 15px 40px; font-size: 24px; cursor: pointer;
-            background: white; border: none; border-radius: 50px;
-            font-weight: bold; transition: 0.3s;
-        }
-        button:hover { background: #ff3333; color: white; transform: scale(1.1); }
-        
-        /* 피격 효과 (붉은 화면) */
-        #damage-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: red; opacity: 0; pointer-events: none; transition: opacity 0.2s;
-            z-index: 5;
-        }
-    </style>
+        /* HUD */
+        .hud-top { position: absolute; top: 20px; left: 20px; display: flex; gap: 15px; }
+        .stat-box {
+            background: rgba(0, 0, 0, 0.6); color: white; padding: 10px 20px;
+            border-radius: 8px; font-size: 18px; font-weight: bold;
+            border: 1px solid rgba(255,255,255,0.3); backdrop-filter: blur(4px);
+        }
+        #hp-bar { color: #ff4444; border-bottom: 3px solid #ff4444; }
+        #score-bar { color: #44ff44; border-bottom: 3px solid #44ff44; }
+
+        /* 보스 체력바 */
+        #boss-ui {
+            display: none; position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+            width: 50%; height: 25px; background: #222; border: 2px solid white; border-radius: 12px; overflow: hidden;
+            box-shadow: 0 0 15px rgba(255,0,0,0.5);
+        }
+        #boss-hp-fill { width: 100%; height: 100%; background: linear-gradient(90deg, #ff0000, #ff5500); transition: width 0.1s; }
+        #boss-msg { position: absolute; top: 55px; left: 50%; transform: translateX(-50%); color: red; font-weight: bold; display: none; text-shadow: 1px 1px 0 #000; animation: blink 1s infinite; }
+
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* 시작 화면 */
+        #start-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; color: white; z-index: 20; pointer-events: auto;
+        }
+        
+        /* 게임 오버 */
+        #game-over {
+            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.95); flex-direction: column;
+            justify-content: center; align-items: center; z-index: 100; pointer-events: auto;
+        }
+        button { padding: 15px 50px; font-size: 22px; cursor: pointer; border-radius: 50px; border:none; font-weight: bold; background: white; transition: 0.2s; }
+        button:hover { background: #ff3333; color: white; transform: scale(1.05); }
+
+        /* 모바일 UI */
+        .mobile-controls { display: none; pointer-events: auto; }
+        #joystick-zone { position: absolute; bottom: 50px; left: 40px; width: 140px; height: 140px; background: rgba(255,255,255,0.1); border-radius: 50%; border: 2px solid rgba(255,255,255,0.3); }
+        #joystick-knob { position: absolute; top: 50%; left: 50%; width: 60px; height: 60px; background: rgba(255,255,255,0.8); border-radius: 50%; transform: translate(-50%, -50%); }
+        .action-btn { position: absolute; width: 75px; height: 75px; border-radius: 50%; background: rgba(255,255,255,0.2); border: 2px solid white; color: white; display: flex; justify-content: center; align-items: center; font-weight: bold; font-size: 16px; user-select: none; }
+        .action-btn:active { background: rgba(255,255,255,0.5); transform: scale(0.95); }
+        #btn-jump { bottom: 60px; right: 40px; }
+        #btn-fire { bottom: 160px; right: 100px; background: rgba(255,50,50,0.4); border-color: #ff5555; }
+        #btn-cam { top: 20px; right: 20px; width: 60px; height: 60px; font-size: 14px; }
+
+        /* 피격 효과 */
+        #damage-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, transparent 40%, red 120%); opacity: 0; pointer-events: none; transition: opacity 0.1s; z-index: 5; }
+    </style>
 </head>
 <body>
-    <div id="ui-layer">
-        <div class="stat-box" id="hp-bar">HP: 100</div>
-        <div class="stat-box" id="score-bar">SCORE: 0</div>
-        <div style="color: #aaa; margin-top: 5px; font-family: sans-serif; font-size: 14px;">WASD: 이동 | SPACE: 점프 | 마우스: 발사</div>
-    </div>
+    <div id="ui-layer">
+        <div id="crosshair"></div>
+        <div class="hud-top">
+            <div class="stat-box" id="hp-bar">HP: 100</div>
+            <div class="stat-box" id="score-bar">SCORE: 0</div>
+        </div>
+        
+        <div id="boss-msg">⚠ WARNING: BOSS DETECTED ⚠</div>
+        <div id="boss-ui"><div id="boss-hp-fill"></div></div>
 
-    <div id="damage-overlay"></div>
+        <div class="mobile-controls">
+            <div id="joystick-zone"><div id="joystick-knob"></div></div>
+            <div id="btn-fire" class="action-btn">FIRE</div>
+            <div id="btn-jump" class="action-btn">JUMP</div>
+            <div id="btn-cam" class="action-btn">CAM</div>
+        </div>
+    </div>
 
-    <div id="game-over" style="display: none;">
-        <h1>GAME OVER</h1>
-        <p>Final Score: <span id="final-score">0</span></p>
-        <button onclick="location.reload()">RESTART</button>
-    </div>
+    <div id="damage-overlay"></div>
 
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
-            }
-        }
-    </script>
+    <div id="start-screen">
+        <h1 style="font-size: 40px; margin-bottom: 10px; color:#44ff44;">SYSTEM READY</h1>
+        <p class="blink" style="margin-bottom: 30px;">CLICK TO ENGAGE</p>
+        <div style="text-align: center; color: #aaa; font-size: 14px; line-height: 1.6;">
+            [PC] WASD: Move | SPACE: Jump | P: View Mode<br>
+            MOUSE: Aim | CLICK: Fire<br><br>
+            [MOBILE] Joystick & Buttons Auto-Enabled
+        </div>
+    </div>
 
-    <script type="module">
-        import * as THREE from 'three';
+    <div id="game-over">
+        <h1 style="color:red; font-size:60px; margin:0;">MISSION FAILED</h1>
+        <p style="color:white; font-size:30px;">Final Score: <span id="final-score">0</span></p>
+        <button onclick="location.reload()">REBOOT SYSTEM</button>
+    </div>
 
-        // --- 게임 상태 변수 ---
-        let hp = 100;
-        let score = 0;
-        let isGameOver = false;
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
 
-        const bullets = [];
-        const enemies = [];
-        const debrisList = [];
-        const keys = { w: false, a: false, s: false, d: false, space: false };
-        
-        let playerVelocityY = 0;
-        const gravity = -0.015;
-        const jumpPower = 0.4;
-        let isGrounded = true;
+    <script type="module">
+        import * as THREE from 'three';
 
-        // UI 업데이트 함수
-        function updateUI() {
-            document.getElementById('hp-bar').innerText = `HP: ${hp}`;
-            document.getElementById('score-bar').innerText = `SCORE: ${score}`;
-        }
+        // --- 1. 설정 및 상태 ---
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        if (isMobile) {
+            document.querySelector('.mobile-controls').style.display = 'block';
+            document.getElementById('start-screen').style.display = 'none';
+            document.getElementById('crosshair').style.display = 'none'; // 모바일은 자동조준이라 크로스헤어 숨김
+        }
 
-        // 게임 오버 함수
-        function triggerGameOver() {
-            isGameOver = true;
-            document.getElementById('game-over').style.display = 'flex';
-            document.getElementById('final-score').innerText = score;
-        }
+        const state = {
+            hp: 100, score: 0, isGameOver: false,
+            bossSpawned: false, nextBossScore: 15000,
+            bullets: [], enemies: [], obstacles: [], debris: [],
+            cameraMode: 'TPS', // 'TPS' or 'FPS'
+            cameraRotation: { x: 0, y: Math.PI } // Y: 좌우, X: 상하
+        };
 
-        // 피격 효과 함수
-        function takeDamage() {
-            if(isGameOver) return;
-            hp -= 20; // 한 번 맞으면 체력 20 감소
-            updateUI();
-            
-            // 화면 붉게 깜빡임
-            const overlay = document.getElementById('damage-overlay');
-            overlay.style.opacity = 0.6;
-            setTimeout(() => { overlay.style.opacity = 0; }, 200);
+        const input = { w: false, a: false, s: false, d: false, space: false, fire: false, joyX: 0, joyY: 0 };
+        const physics = { gravity: -0.018, jump: 0.45 };
 
-            if (hp <= 0) triggerGameOver();
-        }
+        // --- 2. 씬 & 렌더러 ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050505);
+        scene.fog = new THREE.FogExp2(0x050505, 0.02);
 
-        // --- 캐릭터 생성 (안드로이드) ---
-        function createHumanoid(color, isPlayer) {
-            const group = new THREE.Group();
-            const material = new THREE.MeshStandardMaterial({ color: color, roughness: 0.5, metalness: 0.4 });
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
 
-            const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.3, 1.1, 16), material);
-            torso.position.y = 1.55; torso.castShadow = torso.receiveShadow = true; group.add(torso);
+        // 조명
+        const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.4);
+        scene.add(hemiLight);
+        const dirLight = new THREE.DirectionalLight(0xffeedd, 1.5);
+        dirLight.position.set(50, 100, 50); dirLight.castShadow = true;
+        dirLight.shadow.mapSize.set(2048, 2048);
+        scene.add(dirLight);
 
-            const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16), material);
-            head.position.y = torso.position.y + 0.8; head.castShadow = head.receiveShadow = true; group.add(head);
-            
-            const eye = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.1), new THREE.MeshStandardMaterial({ color: 0x000000, emissive: color, emissiveIntensity: 0.5 }));
-            eye.position.set(0, 0, 0.25); head.add(eye);
+        // 맵
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(500, 500), new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 }));
+        plane.rotation.x = -Math.PI / 2; plane.receiveShadow = true; scene.add(plane);
+        scene.add(new THREE.GridHelper(500, 100, 0x444444, 0x111111));
 
-            function createLimb(radius, length, posX, posY, posZ) {
-                 const pivot = new THREE.Group(); pivot.position.set(posX, posY, posZ);
-                 const limb = new THREE.Mesh(new THREE.CapsuleGeometry(radius, length * 0.7, 8, 16), material);
-                 limb.position.y = -length / 2; limb.castShadow = limb.receiveShadow = true;
-                 pivot.add(limb); group.add(pivot); return pivot;
-            }
+        // --- 3. 객체 생성 (디테일 업그레이드) ---
+        function createHumanoid(color, isPlayer, scale = 1) {
+            const group = new THREE.Group();
+            const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.4, metalness: 0.3 });
+            const darkMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
 
-            const armL = 0.8; const legL = 1.0;
-            const leftArm = createLimb(0.12, armL, -0.5, torso.position.y + 0.4, 0);
-            const rightArm = createLimb(0.12, armL, 0.5, torso.position.y + 0.4, 0);
-            const leftLeg = createLimb(0.15, legL, -0.25, legL, 0);
-            const rightLeg = createLimb(0.15, legL, 0.25, legL, 0);
+            // 몸통 (박스 형태)
+            const torso = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.7, 0.3), mat);
+            torso.position.y = 1.15; torso.castShadow = true; group.add(torso);
+            
+            // 머리
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), mat);
+            head.position.y = 0.6; torso.add(head);
+            // 눈 (바이저)
+            const eye = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.1, 0.1), new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x00ffff }));
+            eye.position.set(0, 0.05, 0.15); head.add(eye);
 
-            group.userData = { leftLeg, rightLeg, leftArm, rightArm, torso };
+            // 팔다리 생성 함수
+            const createLimb = (x, y, isLeg) => {
+                const g = new THREE.Group(); g.position.set(x, y, 0);
+                const limb = new THREE.Mesh(new THREE.BoxGeometry(0.18, isLeg?0.8:0.7, 0.18), mat);
+                limb.position.y = isLeg ? -0.4 : -0.35; limb.castShadow = true; g.add(limb);
+                // 관절 표현
+                const joint = new THREE.Mesh(new THREE.SphereGeometry(0.12), darkMat);
+                g.add(joint); group.add(g); return g;
+            };
+            
+            group.userData = {
+                torso,
+                lArm: createLimb(-0.4, 1.45, false), rArm: createLimb(0.4, 1.45, false),
+                lLeg: createLimb(-0.2, 0.8, true), rLeg: createLimb(0.2, 0.8, true),
+                hp: 100, maxHp: 100, velocity: new THREE.Vector3(), isGrounded: false,
+                boxSize: new THREE.Vector3(0.6 * scale, 1.8 * scale, 0.6 * scale) // 충돌 박스 크기
+            };
 
-            if(isPlayer) {
-                 const gun = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.2, 0.6), new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8 }));
-                 gun.position.set(0, -0.4, 0.3); rightArm.add(gun); group.userData.gunTip = gun;
-            }
-            return group;
-        }
+            // 플레이어 무기
+            if (isPlayer) {
+                const gun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.6), darkMat);
+                gun.position.set(0, -0.35, 0.4); group.userData.rArm.add(gun);
+                group.userData.gunTip = gun;
+            } else {
+                // 적 무기 (칼날 형태 - 장식)
+                const blade = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.1), new THREE.MeshStandardMaterial({color:0xff0000, emissive:0x550000}));
+                blade.position.set(0, -0.4, 0.2); blade.rotation.x = Math.PI/2; group.userData.rArm.add(blade);
+                group.userData.gunTip = blade; // 발사 위치용
+            }
 
-        function animateHumanoid(humanoid, time, isMoving) {
-            if (!isGrounded && humanoid === player) {
-                 humanoid.userData.leftLeg.rotation.x = -0.3; humanoid.userData.rightLeg.rotation.x = 0.5;
-                 humanoid.userData.leftArm.rotation.x = -0.5; humanoid.userData.rightArm.rotation.x = -0.5; return;
-            }
-            if (!isMoving) { 
-                humanoid.userData.leftLeg.rotation.x = humanoid.userData.rightLeg.rotation.x = 0;
-                humanoid.userData.leftArm.rotation.x = humanoid.userData.rightArm.rotation.x = 0; return; 
-            }
-            const angle = Math.sin(time * 10) * 0.6;
-            humanoid.userData.leftLeg.rotation.x = angle; humanoid.userData.rightLeg.rotation.x = -angle;
-            humanoid.userData.leftArm.rotation.x = -angle * 0.7; humanoid.userData.rightArm.rotation.x = angle * 0.7;
-        }
+            group.scale.set(scale, scale, scale);
+            return group;
+        }
 
-        // --- 파편 효과 ---
-        function spawnDebris(position, color) {
-            for (let i = 0; i < 15; i++) {
-                const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), new THREE.MeshStandardMaterial({ color: color }));
-                mesh.position.copy(position);
-                mesh.userData.velocity = new THREE.Vector3((Math.random()-0.5)*1.5, Math.random()*2+0.5, (Math.random()-0.5)*1.5);
-                mesh.userData.rotationSpeed = new THREE.Vector3(Math.random(), Math.random(), Math.random()).multiplyScalar(0.2);
-                scene.add(mesh); debrisList.push(mesh);
-            }
-        }
+        const player = createHumanoid(0x0088ff, true);
+        scene.add(player);
 
-        // 1. 씬 설정
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x222222);
-        scene.fog = new THREE.FogExp2(0x222222, 0.02);
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        document.body.appendChild(renderer.domElement);
+        // 장애물 생성 (밟을 수 있음)
+        function createObstacles() {
+            for (let i = 0; i < 50; i++) {
+                const w = 3 + Math.random() * 5; const h = 2 + Math.random() * 6; const d = 3 + Math.random() * 5;
+                const obs = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: 0x555566 }));
+                
+                // 플레이어 시작 위치 주변 제외하고 생성
+                let x, z;
+                do { x = (Math.random()-0.5)*300; z = (Math.random()-0.5)*300; } while(Math.sqrt(x*x+z*z) < 20);
 
-        // 2. 조명 및 환경
-        const dirLight = new THREE.DirectionalLight(0xffeedd, 2);
-        dirLight.position.set(30, 50, 30); dirLight.castShadow = true;
-        dirLight.shadow.mapSize.set(2048, 2048);
-        dirLight.shadow.camera.top = 50; dirLight.shadow.camera.bottom = -50; dirLight.shadow.camera.left = -50; dirLight.shadow.camera.right = 50;
-        scene.add(dirLight); scene.add(new THREE.AmbientLight(0x404050, 0.5));
+                obs.position.set(x, h/2, z);
+                obs.castShadow = true; obs.receiveShadow = true;
+                obs.userData.box = new THREE.Box3().setFromObject(obs);
+                scene.add(obs); state.obstacles.push(obs);
+            }
+        }
+        createObstacles();
 
-        const plane = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.9 }));
-        plane.rotation.x = -Math.PI / 2; plane.receiveShadow = true; scene.add(plane);
-        
-        for(let i=0; i<30; i++) {
-            const obs = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x666666 }));
-            const s = 2 + Math.random() * 5;
-            obs.scale.set(s, s*0.7, s); obs.position.set((Math.random()-0.5)*150, s*0.35, (Math.random()-0.5)*150);
-            obs.castShadow = true; obs.receiveShadow = true; scene.add(obs);
-        }
+        // --- 4. 입력 시스템 ---
+        // Pointer Lock (PC)
+        const startScreen = document.getElementById('start-screen');
+        startScreen.addEventListener('click', () => { document.body.requestPointerLock(); });
+        document.addEventListener('pointerlockchange', () => {
+            if (document.pointerLockElement === document.body) startScreen.style.display = 'none';
+            else if (!state.isGameOver) startScreen.style.display = 'flex';
+        });
 
-        // 3. 플레이어
-        const player = createHumanoid(0x0088ff, true); scene.add(player);
-        const playerSpeed = 0.2; let isPlayerMoving = false;
+        // Mouse Move (Camera)
+        document.addEventListener('mousemove', (e) => {
+            if (document.pointerLockElement === document.body) {
+                state.cameraRotation.y -= e.movementX * 0.0025;
+                state.cameraRotation.x -= e.movementY * 0.0025;
+                state.cameraRotation.x = Math.max(-1.4, Math.min(1.4, state.cameraRotation.x));
+            }
+        });
 
-        // 4. 입력
-        window.addEventListener('keydown', (e) => { 
-            if(isGameOver) return;
-            if (e.key.toLowerCase() in keys) keys[e.key.toLowerCase()] = true; 
-            if (e.code === 'Space') keys.space = true;
-        });
-        window.addEventListener('keyup', (e) => { 
-            if (e.key.toLowerCase() in keys) keys[e.key.toLowerCase()] = false; 
-            if (e.code === 'Space') keys.space = false;
-        });
+        // Click to Fire
+        document.addEventListener('mousedown', () => {
+            if (document.pointerLockElement === document.body || isMobile) fireBullet();
+        });
 
-        const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2(); const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-        window.addEventListener('mousemove', (e) => {
-            if(isGameOver) return;
-            mouse.x = (e.clientX / window.innerWidth) * 2 - 1; mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
-            raycaster.setFromCamera(mouse, camera); const target = new THREE.Vector3(); raycaster.ray.intersectPlane(groundPlane, target);
-            if (target) player.lookAt(target.x, player.position.y, target.z);
-        });
+        // Keyboard
+        window.addEventListener('keydown', e => {
+            const k = e.key.toLowerCase();
+            if (input.hasOwnProperty(k)) input[k] = true;
+            if (e.code === 'Space') input.space = true;
+            if (k === 'p') toggleCameraMode();
+        });
+        window.addEventListener('keyup', e => {
+            const k = e.key.toLowerCase();
+            if (input.hasOwnProperty(k)) input[k] = false;
+            if (e.code === 'Space') input.space = false;
+        });
 
-        window.addEventListener('mousedown', () => {
-            if(isGameOver) return;
-            const bullet = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.6), new THREE.MeshBasicMaterial({ color: 0xffaa00 }));
-            const gunTipPos = new THREE.Vector3(); player.userData.gunTip.getWorldPosition(gunTipPos);
-            bullet.position.copy(gunTipPos); bullet.quaternion.copy(player.quaternion); scene.add(bullet);
-            bullets.push({ mesh: bullet, velocity: new THREE.Vector3(0, 0, 2.5).applyQuaternion(player.quaternion), life: 100 });
-        });
+        // Mobile Controls
+        const joy = { zone: document.getElementById('joystick-zone'), knob: document.getElementById('joystick-knob'), id: null, cx:0, cy:0 };
+        joy.zone.addEventListener('touchstart', e => { e.preventDefault(); const t = e.changedTouches[0]; joy.id = t.identifier; const r = joy.zone.getBoundingClientRect(); joy.cx = r.left+r.width/2; joy.cy = r.top+r.height/2; updateJoy(t.clientX, t.clientY); });
+        joy.zone.addEventListener('touchmove', e => { e.preventDefault(); for(let t of e.changedTouches) if(t.identifier===joy.id) updateJoy(t.clientX, t.clientY); });
+        const endJoy = e => { for(let t of e.changedTouches) if(t.identifier===joy.id) { joy.id=null; joy.knob.style.transform=`translate(-50%,-50%)`; input.joyX=0; input.joyY=0; } };
+        joy.zone.addEventListener('touchend', endJoy); joy.zone.addEventListener('touchcancel', endJoy);
+        function updateJoy(x,y) {
+            const dx = x-joy.cx, dy = y-joy.cy, d = Math.min(Math.sqrt(dx*dx+dy*dy), 60); const a = Math.atan2(dy,dx);
+            joy.knob.style.transform = `translate(calc(-50% + ${Math.cos(a)*d}px), calc(-50% + ${Math.sin(a)*d}px))`;
+            input.joyX = Math.cos(a)*(d/60); input.joyY = Math.sin(a)*(d/60);
+        }
+        document.getElementById('btn-jump').addEventListener('touchstart', e=>{e.preventDefault(); input.space=true;});
+        document.getElementById('btn-jump').addEventListener('touchend', e=>{e.preventDefault(); input.space=false;});
+        document.getElementById('btn-fire').addEventListener('touchstart', e=>{e.preventDefault(); fireBullet();});
+        document.getElementById('btn-cam').addEventListener('touchstart', e=>{e.preventDefault(); toggleCameraMode();});
 
-        // 5. 적 생성
-        setInterval(() => {
-            if(isGameOver || enemies.length > 15) return;
-            const enemy = createHumanoid(0xff4444, false);
-            const angle = Math.random() * Math.PI * 2; const distance = 30 + Math.random() * 20;
-            enemy.position.set(player.position.x + Math.cos(angle) * distance, 0, player.position.z + Math.sin(angle) * distance);
-            scene.add(enemy); enemies.push(enemy);
-        }, 2000);
+        function toggleCameraMode() {
+            state.cameraMode = state.cameraMode === 'TPS' ? 'FPS' : 'TPS';
+            // 크로스헤어 조정 (FPS일 때 더 크게 등.. 여기선 그대로 둠)
+        }
 
-        // 6. 메인 루프
-        const clock = new THREE.Clock();
-        function animate() {
-            requestAnimationFrame(animate);
-            if(isGameOver) return; // 게임 오버면 멈춤
+        // --- 5. 물리 및 충돌 (벽 통과 방지) ---
+        function checkCollision(pos, boxSize) {
+            const min = new THREE.Vector3(pos.x - boxSize.x/2, pos.y, pos.z - boxSize.z/2);
+            const max = new THREE.Vector3(pos.x + boxSize.x/2, pos.y + boxSize.y, pos.z + boxSize.z/2);
+            const box = new THREE.Box3(min, max);
 
-            const time = clock.getElapsedTime();
+            for (const obs of state.obstacles) {
+                if (box.intersectsBox(obs.userData.box)) return { hit: true, box: obs.userData.box };
+            }
+            return { hit: false };
+        }
 
-            // 점프 & 중력
-            if (keys.space && isGrounded) { playerVelocityY = jumpPower; isGrounded = false; }
-            playerVelocityY += gravity;
-            player.position.y += playerVelocityY;
-            if (player.position.y < 0) { player.position.y = 0; playerVelocityY = 0; isGrounded = true; }
+        // --- 6. 게임 로직 ---
+        let boss = null;
+        const clock = new THREE.Clock();
 
-            // 이동
-            isPlayerMoving = false;
-            if (keys.w) { player.position.z -= playerSpeed; isPlayerMoving = true; }
-            if (keys.s) { player.position.z += playerSpeed; isPlayerMoving = true; }
-            if (keys.a) { player.position.x -= playerSpeed; isPlayerMoving = true; }
-            if (keys.d) { player.position.x += playerSpeed; isPlayerMoving = true; }
-            animateHumanoid(player, time, isPlayerMoving);
-            
-            camera.position.lerp(player.position.clone().add(new THREE.Vector3(0, 15, 15)), 0.1);
-            camera.lookAt(player.position);
+        function fireBullet(isEnemy = false, origin = null, direction = null) {
+            const color = isEnemy ? 0xff0000 : 0xffff00;
+            const bullet = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.6), new THREE.MeshBasicMaterial({ color: color }));
+            
+            let pos, dir;
+            if (origin && direction) {
+                pos = origin.clone(); dir = direction.clone();
+            } else {
+                // 플레이어 발사
+                pos = new THREE.Vector3(); player.userData.gunTip.getWorldPosition(pos);
+                if (isMobile) {
+                    let target = boss || null;
+                    if(!target) {
+                        let minD = 1000;
+                        state.enemies.forEach(e => { let d = player.position.distanceTo(e.position); if(d<minD){minD=d; target=e;} });
+                    }
+                    if(target) dir = new THREE.Vector3().subVectors(target.position.clone().add(new THREE.Vector3(0,1,0)), pos).normalize();
+                    else dir = new THREE.Vector3(0,0,-1).applyAxisAngle(new THREE.Vector3(0,1,0), player.rotation.y);
+                } else {
+                    dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(state.cameraRotation.x, state.cameraRotation.y, 0));
+                }
+            }
 
-            // 총알 로직
-            for (let i = bullets.length - 1; i >= 0; i--) {
-                const b = bullets[i]; b.mesh.position.add(b.velocity); b.life--;
-                for (let j = enemies.length - 1; j >= 0; j--) {
-                    if (b.mesh.position.distanceTo(enemies[j].position.clone().add(new THREE.Vector3(0,1.5,0))) < 1.5) {
-                        spawnDebris(enemies[j].position.clone().add(new THREE.Vector3(0,1.5,0)), 0xff4444);
-                        scene.remove(enemies[j]); enemies.splice(j, 1);
-                        scene.remove(b.mesh); bullets.splice(i, 1);
-                        score += 100; updateUI(); // 점수 증가
-                        break;
-                    }
-                }
-                if (b.life <= 0 && bullets[i]) { scene.remove(b.mesh); bullets.splice(i, 1); }
-            }
+            bullet.position.copy(pos);
+            bullet.lookAt(pos.clone().add(dir));
+            state.bullets.push({ mesh: bullet, velocity: dir.multiplyScalar(isEnemy ? 0.6 : 2.5), life: 100, isEnemy });
+            scene.add(bullet);
+        }
 
-            // 적 AI 및 충돌 체크
-            for (let i = enemies.length - 1; i >= 0; i--) {
-                const enemy = enemies[i];
-                enemy.lookAt(player.position);
-                animateHumanoid(enemy, time, true);
-                enemy.position.add(new THREE.Vector3(0, 0, 1).applyQuaternion(enemy.quaternion).multiplyScalar(0.06));
+        function spawnBoss() {
+            state.bossSpawned = true;
+            boss = createHumanoid(0xff0000, false, 5); // 5배 크기
+            boss.position.set(player.position.x + 40, 10, player.position.z + 40);
+            boss.userData.hp = 3000; boss.userData.maxHp = 3000;
+            boss.userData.attackTimer = 0;
+            scene.add(boss);
+            
+            document.getElementById('boss-ui').style.display = 'block';
+            document.getElementById('boss-msg').style.display = 'block';
+            setTimeout(() => document.getElementById('boss-msg').style.display = 'none', 3000);
+        }
 
-                // 플레이어와 충돌 체크
-                if (enemy.position.distanceTo(player.position) < 1.0) {
-                    takeDamage(); // 데미지 입음
-                    // 적은 뒤로 살짝 튕겨남 (중복 타격 방지)
-                    enemy.translateZ(-3);
-                }
-            }
+        function spawnDebris(pos, color) {
+            for(let i=0; i<8; i++) {
+                const m = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.2,0.2), new THREE.MeshBasicMaterial({color:color}));
+                m.position.copy(pos); scene.add(m);
+                state.debris.push({mesh:m, vel:new THREE.Vector3((Math.random()-0.5), Math.random(), (Math.random()-0.5)), life:40});
+            }
+        }
 
-            // 파편 물리
-            for(let i = debrisList.length - 1; i >= 0; i--) {
-                const debris = debrisList[i];
-                debris.userData.velocity.y -= 0.1; debris.position.add(debris.userData.velocity);
-                debris.rotation.x += debris.userData.rotationSpeed.x; debris.rotation.y += debris.userData.rotationSpeed.y;
-                if(debris.position.y < -5) { scene.remove(debris); debrisList.splice(i, 1); }
-            }
+        function animate() {
+            requestAnimationFrame(animate);
+            if (state.isGameOver) return;
+            const dt = clock.getDelta();
+            const time = clock.getElapsedTime();
 
-            renderer.render(scene, camera);
-        }
-        animate();
-        window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth,window.innerHeight); });
-    </script>
+            // === A. 플레이어 이동 ===
+            // 1. 카메라 회전에 따른 이동 방향 계산
+            player.rotation.y = state.cameraRotation.y;
+            const fwd = new THREE.Vector3(0,0,-1).applyAxisAngle(new THREE.Vector3(0,1,0), state.cameraRotation.y);
+            const right = new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0), state.cameraRotation.y);
+            const move = new THREE.Vector3();
+            if(input.w) move.add(fwd); if(input.s) move.sub(fwd);
+            if(input.d) move.add(right); if(input.a) move.sub(right);
+            if(isMobile && (input.joyX||input.joyY)) { move.set(input.joyX, 0, input.joyY); player.rotation.y = -Math.atan2(input.joyY, input.joyX) + Math.PI/2; }
+            
+            move.normalize().multiplyScalar(0.25);
+
+            // 2. 물리 적용 (X, Z 분리 충돌 체크)
+            player.position.x += move.x;
+            if(checkCollision(player.position, player.userData.boxSize).hit) player.position.x -= move.x;
+            player.position.z += move.z;
+            if(checkCollision(player.position, player.userData.boxSize).hit) player.position.z -= move.z;
+
+            // 3. 점프 및 중력
+            if(input.space && player.userData.isGrounded) { player.userData.velocity.y = physics.jump; player.userData.isGrounded = false; }
+            player.userData.velocity.y += physics.gravity;
+            player.position.y += player.userData.velocity.y;
+
+            // 4. 바닥/착지 체크
+            const colY = checkCollision(player.position, player.userData.boxSize);
+            if(colY.hit && player.userData.velocity.y < 0 && player.position.y > colY.box.min.y) {
+                player.position.y = colY.box.max.y; player.userData.velocity.y = 0; player.userData.isGrounded = true;
+            } else if(player.position.y < 0) {
+                player.position.y = 0; player.userData.velocity.y = 0; player.userData.isGrounded = true;
+            }
+
+            // === B. 카메라 업데이트 (FPS / TPS) ===
+            if(!isMobile) {
+                if (state.cameraMode === 'TPS') {
+                    // 3인칭: 뒤쪽 위
+                    const cx = player.position.x + Math.sin(state.cameraRotation.y) * 5;
+                    const cz = player.position.z + Math.cos(state.cameraRotation.y) * 5;
+                    camera.position.set(cx, player.position.y + 2.5 + (state.cameraRotation.x * 2), cz);
+                    const lookTarget = player.position.clone().add(new THREE.Vector3(0, 1.5, 0)); // 플레이어 머리 쪽
+                    const aimDir = new THREE.Vector3(0,0,-10).applyEuler(new THREE.Euler(state.cameraRotation.x, state.cameraRotation.y, 0));
+                    camera.lookAt(lookTarget.add(aimDir));
+                } else {
+                    // 1인칭: 머리 위치
+                    const headPos = player.position.clone().add(new THREE.Vector3(0, 1.6, 0));
+                    camera.position.copy(headPos);
+                    const aimDir = new THREE.Vector3(0,0,-1).applyEuler(new THREE.Euler(state.cameraRotation.x, state.cameraRotation.y, 0));
+                    camera.lookAt(headPos.add(aimDir));
+                }
+            } else {
+                // 모바일은 쿼터뷰 고정
+                camera.position.lerp(player.position.clone().add(new THREE.Vector3(0, 15, 12)), 0.1);
+                camera.lookAt(player.position);
+            }
+
+            // === C. 총알 처리 ===
+            for (let i = state.bullets.length - 1; i >= 0; i--) {
+                const b = state.bullets[i]; b.mesh.position.add(b.velocity); b.life--;
+                let hit = false;
+                
+                // 장애물 충돌
+                if(!hit) { for(let obs of state.obstacles) if(obs.userData.box.containsPoint(b.mesh.position)) { hit=true; break; } }
+                
+                // 캐릭터 충돌
+                if (!hit) {
+                    if (b.isEnemy) { // 적 총알 -> 플레이어
+                        if(b.mesh.position.distanceTo(player.position.clone().add(new THREE.Vector3(0,1,0))) < 1.0) {
+                            state.hp -= 10; hit=true;
+                            document.getElementById('damage-overlay').style.opacity = 0.6;
+                            setTimeout(()=>document.getElementById('damage-overlay').style.opacity=0, 200);
+                        }
+                    } else { // 플레이어 총알 -> 적/보스
+                        for(let j=state.enemies.length-1; j>=0; j--) {
+                            if(state.enemies[j].position.distanceTo(b.mesh.position) < 1.5) {
+                                spawnDebris(state.enemies[j].position, 0xff4444);
+                                scene.remove(state.enemies[j]); state.enemies.splice(j,1);
+                                state.score+=100; hit=true; break;
+                            }
+                        }
+                        if(!hit && boss && boss.position.distanceTo(b.mesh.position) < 4) {
+                            boss.userData.hp -= 20; hit=true; spawnDebris(b.mesh.position, 0xff0000);
+                            document.getElementById('boss-hp-fill').style.width = (boss.userData.hp/boss.userData.maxHp*100)+'%';
+                            if(boss.userData.hp<=0) {
+                                scene.remove(boss); boss=null; state.bossSpawned=false; 
+                                document.getElementById('boss-ui').style.display='none';
+                                state.score+=5000; spawnDebris(b.mesh.position, 0xffaa00);
+                            }
+                        }
+                    }
+                }
+
+                if((hit || b.life<=0) && !hit) { scene.remove(b.mesh); state.bullets.splice(i,1); }
+                else if(hit && state.bullets[i]===b) { scene.remove(b.mesh); state.bullets.splice(i,1); }
+            }
+
+            // === D. 적 생성 & AI ===
+            // 보스 스폰
+            if(state.score >= state.nextBossScore && !state.bossSpawned) {
+                spawnBoss(); state.nextBossScore += 15000;
+            }
+            // 일반 적 스폰
+            if(!boss && state.enemies.length < 15 && Math.random() < 0.03) {
+                const e = createHumanoid(0xff4444, false);
+                const a = Math.random()*6.28; const r = 30+Math.random()*20;
+                e.position.set(player.position.x+Math.cos(a)*r, 10, player.position.z+Math.sin(a)*r);
+                scene.add(e); state.enemies.push(e);
+            }
+
+            const allEnemies = [...state.enemies]; if(boss) allEnemies.push(boss);
+
+            allEnemies.forEach(e => {
+                const dist = e.position.distanceTo(player.position);
+                e.lookAt(player.position.x, e.position.y, player.position.z);
+
+                // 1. 이동 (벽 타기 방지 로직 적용)
+                if(dist > (e===boss?8:1.2)) {
+                    const speed = e===boss ? 0.06 : 0.1;
+                    const moveDir = new THREE.Vector3(0,0,1).applyQuaternion(e.quaternion);
+                    
+                    // X축 이동 & 검사
+                    const oldX = e.position.x; e.position.x += moveDir.x * speed;
+                    if(checkCollision(e.position, e.userData.boxSize).hit) e.position.x = oldX;
+
+                    // Z축 이동 & 검사
+                    const oldZ = e.position.z; e.position.z += moveDir.z * speed;
+                    if(checkCollision(e.position, e.userData.boxSize).hit) e.position.z = oldZ;
+                }
+
+                // 2. 중력 (벽 타기 금지)
+                if(e.position.y > 0) {
+                    e.position.y -= 0.15; // 중력
+                    const ground = checkCollision(e.position, e.userData.boxSize);
+                    if(ground.hit && e.position.y > ground.box.min.y) {
+                        // 바닥(평지) 착지 허용, 그러나 너무 높으면(벽) 미끄러짐
+                        if(e.position.y < ground.box.max.y + 1.0) e.position.y = ground.box.max.y;
+                    }
+                } else e.position.y = 0;
+
+                // 3. 공격 (보스 패턴 포함)
+                if(e === boss) {
+                    e.userData.attackTimer += dt;
+                    if(e.userData.attackTimer > 2.0) {
+                        e.userData.attackTimer = 0;
+                        const pattern = Math.random();
+                        if(pattern < 0.5) { // 방사형 탄막
+                            for(let k=0; k<12; k++) {
+                                const angle = (Math.PI*2/12)*k;
+                                fireBullet(true, e.position.clone().add(new THREE.Vector3(0,3,0)), new THREE.Vector3(Math.cos(angle),0,Math.sin(angle)));
+                            }
+                        } else { // 소환
+                             const minion = createHumanoid(0xff8888, false);
+                             minion.position.copy(e.position).add(new THREE.Vector3((Math.random()-0.5)*5, 0, (Math.random()-0.5)*5));
+                             scene.add(minion); state.enemies.push(minion);
+                        }
+                    }
+                } else {
+                    // 일반 적: 근접 공격
+                    if(dist < 1.2) { state.hp -= 0.5; document.getElementById('damage-overlay').style.opacity = 0.3; }
+                }
+
+                // 애니메이션
+                const anim = time * (e===boss?4:10);
+                e.userData.lLeg.rotation.x = Math.sin(anim); e.userData.rLeg.rotation.x = -Math.sin(anim);
+            });
+
+            // 플레이어 사망 체크
+            if(state.hp <= 0) {
+                state.isGameOver = true;
+                document.getElementById('game-over').style.display = 'flex';
+                document.getElementById('final-score').innerText = state.score;
+                document.exitPointerLock();
+            }
+
+            // 파편 및 UI 업데이트
+            for(let i=state.debris.length-1; i>=0; i--) { const d=state.debris[i]; d.mesh.position.add(d.vel); d.vel.y-=0.02; d.life--; if(d.life<=0){scene.remove(d.mesh); state.debris.splice(i,1);} }
+            document.getElementById('hp-bar').innerText = `HP: ${Math.floor(state.hp)}`;
+            document.getElementById('score-bar').innerText = `SCORE: ${state.score}`;
+            
+            // 플레이어 걷기 애니메이션
+            if(input.w||input.s||input.a||input.d || (isMobile&&(input.joyX||input.joyY))) {
+                const at = time * 15;
+                player.userData.lLeg.rotation.x = Math.sin(at); player.userData.rLeg.rotation.x = -Math.sin(at);
+                player.userData.lArm.rotation.x = -Math.sin(at); player.userData.rArm.rotation.x = Math.sin(at);
+            }
+
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => { camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+    </script>
 </body>
 </html>
