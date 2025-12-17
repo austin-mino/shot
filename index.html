@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Final</title>
+    <title>shot</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000; user-select: none; touch-action: none; font-family: 'Segoe UI', sans-serif; }
         
@@ -89,7 +89,7 @@
     <div id="damage-overlay"></div>
 
     <div id="start-screen">
-        <h1 style="font-size: 40px; margin-bottom: 10px; color:#44ff44;">SYSTEM V10 READY</h1>
+        <h1 style="font-size: 40px; margin-bottom: 10px; color:#44ff44;">SYSTEM READY</h1>
         <p class="blink" style="margin-bottom: 30px;">TAP SCREEN TO START</p>
         <div style="text-align: center; color: #aaa; font-size: 14px; line-height: 1.6;">
             [PC] WASD: Move | SPACE: Jump | P: View Mode<br>
@@ -317,60 +317,53 @@
         const clock = new THREE.Clock();
         const raycaster = new THREE.Raycaster();
 
-        function fireBullet(isEnemy = false, origin = null, direction = null) {
-            const color = isEnemy ? 0xff0000 : 0xffff00;
-            const bullet = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.6), new THREE.MeshBasicMaterial({ color: color }));
-            
-            let pos, dir;
-            if (origin && direction) {
-                // 적 발사
-                pos = origin.clone(); dir = direction.clone();
-            } else {
-                // 플레이어 발사 (레이캐스트 조준)
-                pos = new THREE.Vector3(); player.userData.gunTip.getWorldPosition(pos);
-                
-                if(isMobile) {
-                    // 모바일 자동 조준
-                    let target = boss || null;
-                    if(!target) { let minD=1000; state.enemies.forEach(e=>{let d=player.position.distanceTo(e.position); if(d<minD){minD=d;target=e;}}); }
-                    if(target) dir = new THREE.Vector3().subVectors(target.position.clone().add(new THREE.Vector3(0,1.5,0)), pos).normalize();
-                    else dir = new THREE.Vector3(0,0,-1).applyAxisAngle(new THREE.Vector3(0,1,0), player.rotation.y);
-                } else {
-                    // PC 레이캐스트 (화면 중앙이 가리키는 곳 계산)
-                    raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-                    // 레이가 닿는 물체 찾기 (맵, 적)
-                    const intersects = raycaster.intersectObjects(scene.children, true); // true for recursive
-                    let targetPoint;
-                    
-                    // 플레이어 자신과 총알은 제외하고 충돌 검사
-                    const validHit = intersects.find(hit => {
-                        // 플레이어 모델이나 총알은 무시
-                        let p = hit.object;
-                        while(p) { 
-                            if(p === player || p.geometry?.type === 'BoxGeometry' && p.scale.z > 0.5) return false; // Rough check
-                            p = p.parent; 
-                        }
-                        return true;
-                    });
+    function fireBullet(isEnemy = false, origin = null, direction = null) {
+    const color = isEnemy ? 0xff0000 : 0xffff00;
+    const bullet = new THREE.Mesh(
+        new THREE.BoxGeometry(0.08, 0.08, 0.6),
+        new THREE.MeshBasicMaterial({ color })
+    );
 
-                    if (validHit) {
-                        targetPoint = validHit.point;
-                    } else {
-                        // 허공을 쏘면 카메라 앞쪽 먼 곳
-                        targetPoint = raycaster.ray.origin.clone().add(raycaster.ray.direction.clone().multiplyScalar(100));
-                    }
-                    
-                    dir = new THREE.Vector3().subVectors(targetPoint, pos).normalize();
-                }
-            }
-            
-            bullet.position.copy(pos); bullet.lookAt(pos.clone().add(dir));
-            // 총구 앞에서 생성
-            bullet.position.add(dir.clone().multiplyScalar(0.5));
-            
-            state.bullets.push({ mesh: bullet, velocity: dir.multiplyScalar(isEnemy ? 0.6 : 3.0), life: 100, isEnemy });
-            scene.add(bullet);
+    let pos = new THREE.Vector3();
+    let dir = new THREE.Vector3();
+
+    if (origin && direction) {
+        // 적 발사
+        pos.copy(origin);
+        dir.copy(direction).normalize();
+    } else {
+        // ===== 플레이어 발사 =====
+
+        // 총알 시작 위치: 플레이어 머리 근처
+        pos.copy(player.position).add(new THREE.Vector3(0, 1.5, 0));
+
+        if (isMobile) {
+            // 모바일: 플레이어가 보는 방향
+            dir.set(0, 0, -1).applyAxisAngle(
+                new THREE.Vector3(0, 1, 0),
+                player.rotation.y
+            );
+        } else {
+            // PC: 화면 중앙 레이캐스트
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+            dir.copy(raycaster.ray.direction).normalize();
         }
+    }
+
+    bullet.position.copy(pos);
+    bullet.lookAt(pos.clone().add(dir));
+    bullet.position.add(dir.clone().multiplyScalar(0.8));
+
+    scene.add(bullet);
+
+    state.bullets.push({
+        mesh: bullet,
+        velocity: dir.multiplyScalar(isEnemy ? 0.6 : 3.2),
+        life: 90,
+        isEnemy
+    });
+}
+
 
         function spawnBoss() {
             state.bossSpawned = true;
