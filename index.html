@@ -1,430 +1,315 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Final Android Shooter (Original Mechanics)</title>
-    <style>
-        body { margin: 0; overflow: hidden; background-color: #000; user-select: none; touch-action: none; font-family: 'Segoe UI', sans-serif; }
-        
-        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
-        
-        /* 크로스헤어 */
-        #crosshair {
-            position: absolute; top: 50%; left: 50%; width: 20px; height: 20px;
-            transform: translate(-50%, -50%); pointer-events: none;
-        }
-        #crosshair::before, #crosshair::after {
-            content: ''; position: absolute; background: rgba(0, 255, 0, 1.0); box-shadow: 0 0 5px #0f0;
-        }
-        #crosshair::before { top: 9px; left: 0; width: 20px; height: 2px; }
-        #crosshair::after { top: 0; left: 9px; width: 2px; height: 20px; }
+    <meta charset="UTF-8">
+    <title>Final Android Shooter</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #111; user-select: none; }
+        
+        /* HUD (헤드업 디스플레이) 스타일 */
+        #ui-layer {
+            position: absolute; top: 20px; left: 20px; width: 100%;
+            pointer-events: none; z-index: 10;
+        }
+        .stat-box {
+            display: inline-block; background: rgba(0, 0, 0, 0.6);
+            color: white; padding: 10px 20px; border-radius: 8px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 20px; font-weight: bold; margin-right: 10px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        #hp-bar { color: #ff4444; }
+        #score-bar { color: #44ff44; }
 
-        /* HUD */
-        .stat-box {
-            position: absolute; top: 20px;
-            background: rgba(0, 0, 0, 0.6); color: white; padding: 10px 20px;
-            border-radius: 8px; font-size: 20px; font-weight: bold;
-            border: 1px solid rgba(255,255,255,0.3);
-        }
-        #hp-bar { left: 20px; color: #ff4444; }
-        #score-bar { left: 150px; color: #44ff44; }
-
-        /* 시작 화면 */
-        #start-screen {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8); display: flex; flex-direction: column;
-            justify-content: center; align-items: center; color: white; z-index: 20; pointer-events: auto;
-        }
-        
-        /* 게임 오버 */
-        #game-over {
-            display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.9); flex-direction: column;
-            justify-content: center; align-items: center; z-index: 100; pointer-events: auto;
-        }
-        button { padding: 15px 40px; font-size: 24px; cursor: pointer; border-radius: 50px; border:none; font-weight: bold; background: white; }
-        button:hover { background: #ff3333; color: white; }
-
-        /* 모바일용 버튼 */
-        .mobile-btn {
-            display: none; position: absolute; width: 80px; height: 80px; border-radius: 50%;
-            background: rgba(255,255,255,0.2); border: 2px solid white; pointer-events: auto;
-            color: white; font-weight: bold; justify-content: center; align-items: center;
-        }
-    </style>
+        /* 게임 오버 화면 */
+        #game-over {
+            display: none; /* 평소에는 숨김 */
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            z-index: 100;
+        }
+        h1 { color: #ff3333; font-size: 80px; margin: 0; font-family: sans-serif; text-shadow: 0 0 20px red; }
+        p { color: white; font-size: 30px; font-family: sans-serif; margin: 20px 0; }
+        button {
+            padding: 15px 40px; font-size: 24px; cursor: pointer;
+            background: white; border: none; border-radius: 50px;
+            font-weight: bold; transition: 0.3s;
+        }
+        button:hover { background: #ff3333; color: white; transform: scale(1.1); }
+        
+        /* 피격 효과 (붉은 화면) */
+        #damage-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: red; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+            z-index: 5;
+        }
+    </style>
 </head>
 <body>
-    <div id="ui-layer">
-        <div id="crosshair"></div>
-        <div class="stat-box" id="hp-bar">HP: 100</div>
-        <div class="stat-box" id="score-bar">SCORE: 0</div>
+    <div id="ui-layer">
+        <div class="stat-box" id="hp-bar">HP: 100</div>
+        <div class="stat-box" id="score-bar">SCORE: 0</div>
+        <div style="color: #aaa; margin-top: 5px; font-family: sans-serif; font-size: 14px;">WASD: 이동 | SPACE: 점프 | 마우스: 발사</div>
+    </div>
 
-        <div id="btn-fire" class="mobile-btn" style="bottom: 80px; right: 40px; background: rgba(255,0,0,0.3);">FIRE</div>
-        <div id="btn-jump" class="mobile-btn" style="bottom: 80px; left: 40px;">JUMP</div>
-    </div>
+    <div id="damage-overlay"></div>
 
-    <div id="start-screen">
-        <h1>CLICK TO START</h1>
-        <p>PC: Mouse Aim / Click Fire</p>
-    </div>
+    <div id="game-over" style="display: none;">
+        <h1>GAME OVER</h1>
+        <p>Final Score: <span id="final-score">0</span></p>
+        <button onclick="location.reload()">RESTART</button>
+    </div>
 
-    <div id="game-over">
-        <h1 style="color:red; font-size:60px;">GAME OVER</h1>
-        <p style="color:white; font-size:30px;">Score: <span id="final-score">0</span></p>
-        <button onclick="location.reload()">RESTART</button>
-    </div>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+            }
+        }
+    </script>
 
-    <script type="importmap">
-        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
-    </script>
+    <script type="module">
+        import * as THREE from 'three';
 
-    <script type="module">
-        import * as THREE from 'three';
+        // --- 게임 상태 변수 ---
+        let hp = 100;
+        let score = 0;
+        let isGameOver = false;
 
-        // --- 1. 기본 설정 (맨 처음 코드 스타일 변수) ---
-        let hp = 100;
-        let score = 0;
-        let isGameOver = false;
+        const bullets = [];
+        const enemies = [];
+        const debrisList = [];
+        const keys = { w: false, a: false, s: false, d: false, space: false };
+        
+        let playerVelocityY = 0;
+        const gravity = -0.015;
+        const jumpPower = 0.4;
+        let isGrounded = true;
 
-        const bullets = [];     // 원본 스타일: 단순 배열
-        const enemies = [];     // 원본 스타일: 단순 배열
-        const debrisList = [];
-        const obstacles = [];
-        
-        // 입력 키
-        const keys = { w: false, a: false, s: false, d: false, space: false };
-        let cameraRotation = { x: 0, y: Math.PI }; // 시야각
+        // UI 업데이트 함수
+        function updateUI() {
+            document.getElementById('hp-bar').innerText = `HP: ${hp}`;
+            document.getElementById('score-bar').innerText = `SCORE: ${score}`;
+        }
 
-        // --- 2. 씬 & 카메라 설정 ---
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x111111);
-        scene.fog = new THREE.FogExp2(0x111111, 0.02);
+        // 게임 오버 함수
+        function triggerGameOver() {
+            isGameOver = true;
+            document.getElementById('game-over').style.display = 'flex';
+            document.getElementById('final-score').innerText = score;
+        }
 
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.shadowMap.enabled = true;
-        document.body.appendChild(renderer.domElement);
+        // 피격 효과 함수
+        function takeDamage() {
+            if(isGameOver) return;
+            hp -= 20; // 한 번 맞으면 체력 20 감소
+            updateUI();
+            
+            // 화면 붉게 깜빡임
+            const overlay = document.getElementById('damage-overlay');
+            overlay.style.opacity = 0.6;
+            setTimeout(() => { overlay.style.opacity = 0; }, 200);
 
-        // 조명
-        const dirLight = new THREE.DirectionalLight(0xffeedd, 1.5);
-        dirLight.position.set(50, 80, 50); dirLight.castShadow = true;
-        dirLight.shadow.mapSize.set(2048, 2048);
-        scene.add(dirLight); scene.add(new THREE.AmbientLight(0x404040));
+            if (hp <= 0) triggerGameOver();
+        }
 
-        // 바닥
-        const plane = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ color: 0x333333 }));
-        plane.rotation.x = -Math.PI / 2; plane.receiveShadow = true; scene.add(plane);
+        // --- 캐릭터 생성 (안드로이드) ---
+        function createHumanoid(color, isPlayer) {
+            const group = new THREE.Group();
+            const material = new THREE.MeshStandardMaterial({ color: color, roughness: 0.5, metalness: 0.4 });
 
-        // --- 3. 캐릭터 및 객체 생성 ---
-        function createHumanoid(color, isPlayer) {
-            const group = new THREE.Group();
-            const material = new THREE.MeshStandardMaterial({ color: color });
-            
-            // 간단한 박스형 인간 (가장 안정적)
-            const torso = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.8, 0.3), material);
-            torso.position.y = 1.2; torso.castShadow = true; group.add(torso);
-            const head = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), material);
-            head.position.y = 0.6; torso.add(head);
+            const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.3, 1.1, 16), material);
+            torso.position.y = 1.55; torso.castShadow = torso.receiveShadow = true; group.add(torso);
 
-            // 팔다리
-            const limbGeo = new THREE.BoxGeometry(0.15, 0.7, 0.15);
-            const lArm = new THREE.Mesh(limbGeo, material); lArm.position.set(-0.4, 0.3, 0); torso.add(lArm);
-            const rArm = new THREE.Mesh(limbGeo, material); rArm.position.set(0.4, 0.3, 0); torso.add(rArm);
-            const lLeg = new THREE.Mesh(limbGeo, material); lLeg.position.set(-0.2, 0.6, 0); group.add(lLeg);
-            const rLeg = new THREE.Mesh(limbGeo, material); rLeg.position.set(0.2, 0.6, 0); group.add(rLeg);
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16), material);
+            head.position.y = torso.position.y + 0.8; head.castShadow = head.receiveShadow = true; group.add(head);
+            
+            const eye = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.1), new THREE.MeshStandardMaterial({ color: 0x000000, emissive: color, emissiveIntensity: 0.5 }));
+            eye.position.set(0, 0, 0.25); head.add(eye);
 
-            if(isPlayer) {
-                // 총 (Gun)
-                const gun = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.5), new THREE.MeshBasicMaterial({ color: 0x000000 }));
-                gun.position.set(0, -0.3, 0.3); 
-                rArm.add(gun);
-                group.userData.gunTip = gun; // 총구 위치 저장
-            }
+            function createLimb(radius, length, posX, posY, posZ) {
+                 const pivot = new THREE.Group(); pivot.position.set(posX, posY, posZ);
+                 const limb = new THREE.Mesh(new THREE.CapsuleGeometry(radius, length * 0.7, 8, 16), material);
+                 limb.position.y = -length / 2; limb.castShadow = limb.receiveShadow = true;
+                 pivot.add(limb); group.add(pivot); return pivot;
+            }
 
-            // 충돌 박스 사이즈
-            group.userData = { 
-                velocity: new THREE.Vector3(), isGrounded: false, 
-                boxSize: new THREE.Vector3(0.6, 1.8, 0.6),
-                lLeg, rLeg, lArm, rArm 
-            };
-            return group;
-        }
+            const armL = 0.8; const legL = 1.0;
+            const leftArm = createLimb(0.12, armL, -0.5, torso.position.y + 0.4, 0);
+            const rightArm = createLimb(0.12, armL, 0.5, torso.position.y + 0.4, 0);
+            const leftLeg = createLimb(0.15, legL, -0.25, legL, 0);
+            const rightLeg = createLimb(0.15, legL, 0.25, legL, 0);
 
-        const player = createHumanoid(0x0088ff, true);
-        scene.add(player);
+            group.userData = { leftLeg, rightLeg, leftArm, rightArm, torso };
 
-        // 장애물 생성 (밟을 수 있음)
-        for(let i=0; i<40; i++) {
-            const w = 2+Math.random()*4, h = 1+Math.random()*4, d = 2+Math.random()*4;
-            const obs = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), new THREE.MeshStandardMaterial({ color: 0x666666 }));
-            obs.position.set((Math.random()-0.5)*200, h/2, (Math.random()-0.5)*200);
-            obs.castShadow = true; obs.receiveShadow = true;
-            obs.userData.box = new THREE.Box3().setFromObject(obs);
-            scene.add(obs); obstacles.push(obs);
-        }
+            if(isPlayer) {
+                 const gun = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.2, 0.6), new THREE.MeshStandardMaterial({ color: 0x222222, metalness: 0.8 }));
+                 gun.position.set(0, -0.4, 0.3); rightArm.add(gun); group.userData.gunTip = gun;
+            }
+            return group;
+        }
 
-        // --- 4. 입력 처리 (Pointer Lock + Original Shooting) ---
-        
-        // PC: 마우스 클릭 시 시점 잠금 및 발사
-        const startScreen = document.getElementById('start-screen');
-        startScreen.addEventListener('click', () => document.body.requestPointerLock());
-        document.addEventListener('pointerlockchange', () => {
-            if (document.pointerLockElement === document.body) startScreen.style.display = 'none';
-            else if(!isGameOver) startScreen.style.display = 'flex';
-        });
+        function animateHumanoid(humanoid, time, isMoving) {
+            if (!isGrounded && humanoid === player) {
+                 humanoid.userData.leftLeg.rotation.x = -0.3; humanoid.userData.rightLeg.rotation.x = 0.5;
+                 humanoid.userData.leftArm.rotation.x = -0.5; humanoid.userData.rightArm.rotation.x = -0.5; return;
+            }
+            if (!isMoving) { 
+                humanoid.userData.leftLeg.rotation.x = humanoid.userData.rightLeg.rotation.x = 0;
+                humanoid.userData.leftArm.rotation.x = humanoid.userData.rightArm.rotation.x = 0; return; 
+            }
+            const angle = Math.sin(time * 10) * 0.6;
+            humanoid.userData.leftLeg.rotation.x = angle; humanoid.userData.rightLeg.rotation.x = -angle;
+            humanoid.userData.leftArm.rotation.x = -angle * 0.7; humanoid.userData.rightArm.rotation.x = angle * 0.7;
+        }
 
-        document.addEventListener('mousemove', (e) => {
-            if (document.pointerLockElement === document.body) {
-                cameraRotation.y -= e.movementX * 0.003;
-                cameraRotation.x -= e.movementY * 0.003;
-                cameraRotation.x = Math.max(-1.5, Math.min(1.5, cameraRotation.x));
-            }
-        });
+        // --- 파편 효과 ---
+        function spawnDebris(position, color) {
+            for (let i = 0; i < 15; i++) {
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), new THREE.MeshStandardMaterial({ color: color }));
+                mesh.position.copy(position);
+                mesh.userData.velocity = new THREE.Vector3((Math.random()-0.5)*1.5, Math.random()*2+0.5, (Math.random()-0.5)*1.5);
+                mesh.userData.rotationSpeed = new THREE.Vector3(Math.random(), Math.random(), Math.random()).multiplyScalar(0.2);
+                scene.add(mesh); debrisList.push(mesh);
+            }
+        }
 
-        // ★★★ 여기가 제일 중요합니다: 원본 코드의 발사 로직 복원 ★★★
-        // 마우스를 누르는 순간 총알을 생성해서 bullets 배열에 넣습니다.
-        document.addEventListener('mousedown', () => {
-            if (document.pointerLockElement !== document.body && !isMobile) return;
-            fireBullet();
-        });
+        // 1. 씬 설정
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x222222);
+        scene.fog = new THREE.FogExp2(0x222222, 0.02);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
 
-        // 모바일 발사 버튼
-        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-        if(isMobile) {
-            document.querySelectorAll('.mobile-btn').forEach(b=>b.style.display='flex');
-            document.getElementById('start-screen').style.display='none';
-            document.getElementById('crosshair').style.display='none'; // 모바일은 자동조준이라 크로스헤어 끔
-            
-            document.getElementById('btn-fire').addEventListener('touchstart', (e) => { e.preventDefault(); fireBullet(); });
-            document.getElementById('btn-jump').addEventListener('touchstart', (e) => { e.preventDefault(); keys.space = true; });
-            document.getElementById('btn-jump').addEventListener('touchend', (e) => { e.preventDefault(); keys.space = false; });
-            
-            // 모바일 터치 이동 (화면 왼쪽 절반 터치 시 이동)
-            window.addEventListener('touchstart', (e) => {
-                if(e.touches[0].clientX < window.innerWidth/2) keys.w = true; // 간단히 전진만 구현
-            });
-            window.addEventListener('touchend', () => keys.w = false);
-        }
+        // 2. 조명 및 환경
+        const dirLight = new THREE.DirectionalLight(0xffeedd, 2);
+        dirLight.position.set(30, 50, 30); dirLight.castShadow = true;
+        dirLight.shadow.mapSize.set(2048, 2048);
+        dirLight.shadow.camera.top = 50; dirLight.shadow.camera.bottom = -50; dirLight.shadow.camera.left = -50; dirLight.shadow.camera.right = 50;
+        scene.add(dirLight); scene.add(new THREE.AmbientLight(0x404050, 0.5));
 
-        // 키보드
-        window.addEventListener('keydown', e => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = true; if(e.code==='Space') keys.space=true; });
-        window.addEventListener('keyup', e => { if(keys.hasOwnProperty(e.key.toLowerCase())) keys[e.key.toLowerCase()] = false; if(e.code==='Space') keys.space=false; });
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(300, 300), new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.9 }));
+        plane.rotation.x = -Math.PI / 2; plane.receiveShadow = true; scene.add(plane);
+        
+        for(let i=0; i<30; i++) {
+            const obs = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0x666666 }));
+            const s = 2 + Math.random() * 5;
+            obs.scale.set(s, s*0.7, s); obs.position.set((Math.random()-0.5)*150, s*0.35, (Math.random()-0.5)*150);
+            obs.castShadow = true; obs.receiveShadow = true; scene.add(obs);
+        }
 
-        // 총알 발사 함수 (원본 로직 기반)
-        function fireBullet() {
-            // 1. 총알 메쉬 생성
-            const bullet = new THREE.Mesh(
-                new THREE.BoxGeometry(0.1, 0.1, 0.6), 
-                new THREE.MeshBasicMaterial({ color: 0xffaa00 }) // 원본 색상
-            );
+        // 3. 플레이어
+        const player = createHumanoid(0x0088ff, true); scene.add(player);
+        const playerSpeed = 0.2; let isPlayerMoving = false;
 
-            // 2. 위치 설정 (총구 위치)
-            const gunPos = new THREE.Vector3();
-            player.userData.gunTip.getWorldPosition(gunPos);
-            bullet.position.copy(gunPos);
+        // 4. 입력
+        window.addEventListener('keydown', (e) => { 
+            if(isGameOver) return;
+            if (e.key.toLowerCase() in keys) keys[e.key.toLowerCase()] = true; 
+            if (e.code === 'Space') keys.space = true;
+        });
+        window.addEventListener('keyup', (e) => { 
+            if (e.key.toLowerCase() in keys) keys[e.key.toLowerCase()] = false; 
+            if (e.code === 'Space') keys.space = false;
+        });
 
-            // 3. 방향 및 속도 설정
-            // 원본은 플레이어의 회전값을 썼지만, 여기선 카메라가 보는 방향(크로스헤어)으로 쏘기 위해 계산
-            let dir;
-            if(isMobile) {
-                // 모바일: 가장 가까운 적 자동 조준
-                let target = null; let minInfo = 1000;
-                enemies.forEach(e => {
-                    let d = player.position.distanceTo(e.position);
-                    if(d < minInfo) { minInfo = d; target = e; }
-                });
-                if(target) dir = new THREE.Vector3().subVectors(target.position.clone().add(new THREE.Vector3(0,1,0)), gunPos).normalize();
-                else dir = new THREE.Vector3(0,0,-1).applyAxisAngle(new THREE.Vector3(0,1,0), player.rotation.y);
-            } else {
-                // PC: 카메라가 보는 방향
-                const rotation = new THREE.Euler(cameraRotation.x, cameraRotation.y, 0);
-                dir = new THREE.Vector3(0, 0, -1).applyEuler(rotation);
-            }
-            
-            bullet.lookAt(bullet.position.clone().add(dir)); // 총알이 날아가는 방향 봄
+        const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2(); const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+        window.addEventListener('mousemove', (e) => {
+            if(isGameOver) return;
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1; mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera); const target = new THREE.Vector3(); raycaster.ray.intersectPlane(groundPlane, target);
+            if (target) player.lookAt(target.x, player.position.y, target.z);
+        });
 
-            // 원본처럼 객체에 묶어서 배열에 push
-            bullets.push({ 
-                mesh: bullet, 
-                velocity: dir.multiplyScalar(2.5), // 속도 2.5 (원본 수치)
-                life: 100 
-            });
-            
-            scene.add(bullet);
-        }
+        window.addEventListener('mousedown', () => {
+            if(isGameOver) return;
+            const bullet = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.6), new THREE.MeshBasicMaterial({ color: 0xffaa00 }));
+            const gunTipPos = new THREE.Vector3(); player.userData.gunTip.getWorldPosition(gunTipPos);
+            bullet.position.copy(gunTipPos); bullet.quaternion.copy(player.quaternion); scene.add(bullet);
+            bullets.push({ mesh: bullet, velocity: new THREE.Vector3(0, 0, 2.5).applyQuaternion(player.quaternion), life: 100 });
+        });
 
-        function spawnDebris(pos) {
-            for(let i=0; i<10; i++) {
-                const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.2,0.2), new THREE.MeshBasicMaterial({color: 0xff0000}));
-                mesh.position.copy(pos);
-                scene.add(mesh);
-                debrisList.push({ mesh, vy: Math.random()*0.5, life: 50 });
-            }
-        }
+        // 5. 적 생성
+        setInterval(() => {
+            if(isGameOver || enemies.length > 15) return;
+            const enemy = createHumanoid(0xff4444, false);
+            const angle = Math.random() * Math.PI * 2; const distance = 30 + Math.random() * 20;
+            enemy.position.set(player.position.x + Math.cos(angle) * distance, 0, player.position.z + Math.sin(angle) * distance);
+            scene.add(enemy); enemies.push(enemy);
+        }, 2000);
 
-        // --- 5. 메인 루프 (원본의 로직 복원) ---
-        function checkCollision(pos, boxSize) {
-            const min = new THREE.Vector3(pos.x - boxSize.x/2, pos.y, pos.z - boxSize.z/2);
-            const max = new THREE.Vector3(pos.x + boxSize.x/2, pos.y + boxSize.y, pos.z + boxSize.z/2);
-            const box = new THREE.Box3(min, max);
-            for(const obs of obstacles) {
-                if(box.intersectsBox(obs.userData.box)) return { hit: true, box: obs.userData.box };
-            }
-            return { hit: false };
-        }
+        // 6. 메인 루프
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            if(isGameOver) return; // 게임 오버면 멈춤
 
-        const clock = new THREE.Clock();
+            const time = clock.getElapsedTime();
 
-        function animate() {
-            requestAnimationFrame(animate);
-            if(isGameOver) return;
+            // 점프 & 중력
+            if (keys.space && isGrounded) { playerVelocityY = jumpPower; isGrounded = false; }
+            playerVelocityY += gravity;
+            player.position.y += playerVelocityY;
+            if (player.position.y < 0) { player.position.y = 0; playerVelocityY = 0; isGrounded = true; }
 
-            const time = clock.getElapsedTime();
+            // 이동
+            isPlayerMoving = false;
+            if (keys.w) { player.position.z -= playerSpeed; isPlayerMoving = true; }
+            if (keys.s) { player.position.z += playerSpeed; isPlayerMoving = true; }
+            if (keys.a) { player.position.x -= playerSpeed; isPlayerMoving = true; }
+            if (keys.d) { player.position.x += playerSpeed; isPlayerMoving = true; }
+            animateHumanoid(player, time, isPlayerMoving);
+            
+            camera.position.lerp(player.position.clone().add(new THREE.Vector3(0, 15, 15)), 0.1);
+            camera.lookAt(player.position);
 
-            // 1. 플레이어 이동 (TPS 스타일)
-            player.rotation.y = cameraRotation.y;
-            const dir = new THREE.Vector3();
-            const fwd = new THREE.Vector3(0,0,-1).applyAxisAngle(new THREE.Vector3(0,1,0), cameraRotation.y);
-            const right = new THREE.Vector3(1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0), cameraRotation.y);
+            // 총알 로직
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i]; b.mesh.position.add(b.velocity); b.life--;
+                for (let j = enemies.length - 1; j >= 0; j--) {
+                    if (b.mesh.position.distanceTo(enemies[j].position.clone().add(new THREE.Vector3(0,1.5,0))) < 1.5) {
+                        spawnDebris(enemies[j].position.clone().add(new THREE.Vector3(0,1.5,0)), 0xff4444);
+                        scene.remove(enemies[j]); enemies.splice(j, 1);
+                        scene.remove(b.mesh); bullets.splice(i, 1);
+                        score += 100; updateUI(); // 점수 증가
+                        break;
+                    }
+                }
+                if (b.life <= 0 && bullets[i]) { scene.remove(b.mesh); bullets.splice(i, 1); }
+            }
 
-            if(keys.w) dir.add(fwd); if(keys.s) dir.sub(fwd);
-            if(keys.d) dir.add(right); if(keys.a) dir.sub(right);
-            
-            dir.normalize().multiplyScalar(0.25); // 이동 속도
+            // 적 AI 및 충돌 체크
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                enemy.lookAt(player.position);
+                animateHumanoid(enemy, time, true);
+                enemy.position.add(new THREE.Vector3(0, 0, 1).applyQuaternion(enemy.quaternion).multiplyScalar(0.06));
 
-            // X, Z 축 분리 이동 (벽 미끄러짐)
-            player.position.x += dir.x;
-            if(checkCollision(player.position, player.userData.boxSize).hit) player.position.x -= dir.x;
-            player.position.z += dir.z;
-            if(checkCollision(player.position, player.userData.boxSize).hit) player.position.z -= dir.z;
+                // 플레이어와 충돌 체크
+                if (enemy.position.distanceTo(player.position) < 1.0) {
+                    takeDamage(); // 데미지 입음
+                    // 적은 뒤로 살짝 튕겨남 (중복 타격 방지)
+                    enemy.translateZ(-3);
+                }
+            }
 
-            // 점프
-            if(keys.space && player.userData.isGrounded) { player.userData.velocity.y = 0.45; player.userData.isGrounded=false; }
-            player.userData.velocity.y -= 0.015; // 중력
-            player.position.y += player.userData.velocity.y;
+            // 파편 물리
+            for(let i = debrisList.length - 1; i >= 0; i--) {
+                const debris = debrisList[i];
+                debris.userData.velocity.y -= 0.1; debris.position.add(debris.userData.velocity);
+                debris.rotation.x += debris.userData.rotationSpeed.x; debris.rotation.y += debris.userData.rotationSpeed.y;
+                if(debris.position.y < -5) { scene.remove(debris); debrisList.splice(i, 1); }
+            }
 
-            // 바닥 충돌
-            const colY = checkCollision(player.position, player.userData.boxSize);
-            if(colY.hit && player.userData.velocity.y < 0 && player.position.y > colY.box.min.y) {
-                player.position.y = colY.box.max.y; player.userData.velocity.y = 0; player.userData.isGrounded = true;
-            } else if(player.position.y < 0) {
-                player.position.y = 0; player.userData.velocity.y = 0; player.userData.isGrounded = true;
-            }
-
-            // 카메라 위치 업데이트
-            if(!isMobile) {
-                camera.position.set(
-                    player.position.x + Math.sin(cameraRotation.y) * 5,
-                    player.position.y + 3 + (cameraRotation.x * 2),
-                    player.position.z + Math.cos(cameraRotation.y) * 5
-                );
-                // 카메라는 플레이어 앞쪽을 봄 (크로스헤어 방향)
-                const lookTarget = player.position.clone().add(new THREE.Vector3(0, 1.5, 0));
-                // 회전값 적용된 앞쪽 지점 계산
-                const forward = new THREE.Vector3(0,0,-10).applyEuler(new THREE.Euler(cameraRotation.x, cameraRotation.y, 0));
-                camera.lookAt(lookTarget.add(forward));
-            } else {
-                camera.position.lerp(player.position.clone().add(new THREE.Vector3(0, 15, 12)), 0.1);
-                camera.lookAt(player.position);
-            }
-
-            // 2. ★★★ 총알 로직 (가장 처음 코드로 복원) ★★★
-            // 단순 반복문으로 총알 이동 및 거리 체크
-            for (let i = bullets.length - 1; i >= 0; i--) {
-                const b = bullets[i];
-                
-                // 이동 (b.velocity 만큼 계속 더함)
-                b.mesh.position.add(b.velocity);
-                b.life--;
-
-                // 적과의 충돌 체크 (단순 거리 계산)
-                let hit = false;
-                for (let j = enemies.length - 1; j >= 0; j--) {
-                    // 적의 위치(발바닥)에서 위로 1.0만큼 올린 곳(몸통)과의 거리
-                    const enemyCenter = enemies[j].position.clone().add(new THREE.Vector3(0, 1.0, 0));
-                    
-                    if (b.mesh.position.distanceTo(enemyCenter) < 1.5) {
-                        // 명중!
-                        spawnDebris(enemies[j].position);
-                        scene.remove(enemies[j]); enemies.splice(j, 1); // 적 삭제
-                        scene.remove(b.mesh); bullets.splice(i, 1);   // 총알 삭제
-                        score += 100; // 점수 증가
-                        hit = true;
-                        break;
-                    }
-                }
-
-                if (hit) continue; // 맞았으면 다음 총알로
-
-                // 장애물 충돌
-                for(let obs of obstacles) {
-                    if(obs.userData.box.containsPoint(b.mesh.position)) {
-                        hit = true; break;
-                    }
-                }
-
-                // 수명 다하거나 벽에 맞으면 삭제
-                if (b.life <= 0 || hit) {
-                    scene.remove(b.mesh);
-                    bullets.splice(i, 1);
-                }
-            }
-
-            // 3. 적 생성 및 이동
-            if (enemies.length < 10 && Math.random() < 0.02) {
-                const e = createHumanoid(0xff4444, false);
-                const angle = Math.random() * Math.PI * 2;
-                const r = 20 + Math.random() * 20;
-                e.position.set(player.position.x + Math.cos(angle)*r, 10, player.position.z + Math.sin(angle)*r);
-                scene.add(e); enemies.push(e);
-            }
-
-            for (let i = enemies.length - 1; i >= 0; i--) {
-                const e = enemies[i];
-                e.lookAt(player.position.x, e.position.y, player.position.z);
-                
-                // 플레이어 쪽으로 이동
-                const moveVec = new THREE.Vector3(0,0,1).applyQuaternion(e.quaternion).multiplyScalar(0.08);
-                e.position.x += moveVec.x; 
-                e.position.z += moveVec.z;
-                
-                // 적 충돌 시 게임 오버
-                if(e.position.distanceTo(player.position) < 1.0) {
-                    hp -= 1;
-                    if(hp <= 0) {
-                        isGameOver = true;
-                        document.getElementById('game-over').style.display = 'flex';
-                        document.getElementById('final-score').innerText = score;
-                        document.exitPointerLock();
-                    }
-                }
-
-                // 바닥 체크
-                if(e.position.y > 0) e.position.y -= 0.1; else e.position.y = 0;
-
-                // 걷기 애니메이션
-                const anim = time * 10;
-                e.userData.lLeg.rotation.x = Math.sin(anim); e.userData.rLeg.rotation.x = -Math.sin(anim);
-            }
-
-            // 4. 파편 효과
-            for(let i=debrisList.length-1; i>=0; i--) {
-                const d = debrisList[i];
-                d.mesh.position.y += d.vy; d.vy -= 0.02; d.life--;
-                if(d.life<=0) { scene.remove(d.mesh); debrisList.splice(i,1); }
-            }
-
-            // UI 업데이트
-            document.getElementById('hp-bar').innerText = `HP: ${hp}`;
-            document.getElementById('score-bar').innerText = `SCORE: ${score}`;
-
-            renderer.render(scene, camera);
-        }
-        animate();
-
-        window.addEventListener('resize', () => { camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
-    </script>
+            renderer.render(scene, camera);
+        }
+        animate();
+        window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth,window.innerHeight); });
+    </script>
 </body>
 </html>
