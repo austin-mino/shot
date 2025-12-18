@@ -132,7 +132,8 @@
             hp: 100, score: 0, isGameOver: false, isGameActive: false,
             bossSpawned: false, nextBossScore: 5000,
             bullets: [], enemies: [], obstacles: [], debris: [],
-            cameraMode: 'TPS', 
+                gunnerCount: 0, // ✅ 이 줄 추가
+cameraMode: 'TPS', 
             // 구면 좌표계 사용 (phi: 수직, theta: 수평)
             cam: { theta: Math.PI, phi: 1.4, radius: 4.5 } 
         };
@@ -566,7 +567,10 @@ if (fireCooldown > 0) fireCooldown--;
                         if(b.mesh.position.distanceTo(player.position.clone().add(new THREE.Vector3(0,1,0))) < 1.0) { state.hp -= 10; hit=true; document.getElementById('damage-overlay').style.opacity = 0.6; setTimeout(()=>document.getElementById('damage-overlay').style.opacity=0, 200); }
                     } else {
                         for(let j=state.enemies.length-1; j>=0; j--) {
-                            if(state.enemies[j].position.distanceTo(b.mesh.position) < 1.5) { spawnDebris(state.enemies[j].position, 0xff4444); scene.remove(state.enemies[j]); state.enemies.splice(j,1); state.score+=100; hit=true; break; }
+                            if(state.enemies[j].position.distanceTo(b.mesh.position) < 1.5) { spawnDebris(state.enemies[j].position, 0xff4444); if (state.enemies[j].userData.isGunner) {
+    state.gunnerCount--;
+}
+scene.remove(state.enemies[j]); state.enemies.splice(j,1); state.score+=100; hit=true; break; }
                         }
                         if(!hit && boss && boss.position.distanceTo(b.mesh.position) < 4) {
                             boss.userData.hp -= 20; hit=true; spawnDebris(b.mesh.position, 0xff0000); document.getElementById('boss-hp-fill').style.width = (boss.userData.hp/boss.userData.maxHp*100)+'%';
@@ -626,11 +630,47 @@ if (boss) {
             if(state.score >= state.nextBossScore && !state.bossSpawned) { spawnBoss(); state.nextBossScore += 5000; }
             if(!boss && state.enemies.length < 15 && Math.random() < 0.03) {
                 const e = createDetailedHumanoid(0xff4444, false); const a = Math.random()*6.28; const r = 30+Math.random()*20;
-                e.position.set(player.position.x+Math.cos(a)*r, 10, player.position.z+Math.sin(a)*r); scene.add(e); state.enemies.push(e);
+                e.position.set(player.position.x+Math.cos(a)*r, 10, player.position.z+Math.sin(a)*r); // 🔫 GUNNER 설정 (최대 3명)
+    if (state.gunnerCount < 3) {
+        e.userData.isGunner = true;
+        e.userData.shootCooldown = Math.random() * 1.5;
+        state.gunnerCount++;
+
+        // 색으로 구분
+        e.traverse(obj => {
+            if (obj.isMesh && obj.material) {
+                obj.material = obj.material.clone();
+                obj.material.color.set(0x4466ff);
             }
+        });
+    }
+                scene.add(e); state.enemies.push(e);
+            }
+          
+
 
             const allEnemies = [...state.enemies]; if(boss) allEnemies.push(boss);
-            allEnemies.forEach(e => {
+            allEnemies.forEach(e => {// ======================
+// 🔫 GUNNER ENEMY ATTACK
+// ======================
+if (e !== boss && e.userData.isGunner) {
+    e.userData.shootCooldown -= dt;
+
+    if (e.userData.shootCooldown <= 0) {
+        const dir = new THREE.Vector3()
+            .subVectors(player.position, e.position)
+            .normalize();
+
+        fireBullet(
+            true,
+            e.position.clone().add(new THREE.Vector3(0, 3, 0)),
+            dir
+        );
+
+        e.userData.shootCooldown = 2.2;
+    }
+}
+
                 const dist = e.position.distanceTo(player.position); e.lookAt(player.position.x, e.position.y, player.position.z);
                 if(dist > (e===boss?8:1.2)) {
                     const speed = e===boss ? 0.06 : 0.1; const moveDir = new THREE.Vector3(0,0,1).applyQuaternion(e.quaternion);
