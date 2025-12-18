@@ -335,8 +335,17 @@ document.getElementById('btn-fire').addEventListener('touchend', e=>{
 
         // --- 5. 물리 (벽 통과 방지) ---
         function checkCollision(pos, boxSize) {
-            const min = new THREE.Vector3(pos.x - boxSize.x/2, pos.y, pos.z - boxSize.z/2);
-            const max = new THREE.Vector3(pos.x + boxSize.x/2, pos.y + boxSize.y, pos.z + boxSize.z/2);
+            const min = new THREE.Vector3(
+    pos.x - boxSize.x/2,
+    pos.y + 0.2,          // 🔑 바닥은 무시
+    pos.z - boxSize.z/2
+);
+const max = new THREE.Vector3(
+    pos.x + boxSize.x/2,
+    pos.y + boxSize.y*0.5, // 🔑 허리까지만 검사
+    pos.z + boxSize.z/2
+);
+
             const box = new THREE.Box3(min, max);
             for (const obs of state.obstacles) { if (box.intersectsBox(obs.userData.box)) return { hit: true, box: obs.userData.box }; }
             return { hit: false };
