@@ -496,6 +496,9 @@ boss.userData.meleeDamage = 12;
         }
 
         function animate() {
+requestAnimationFrame(animate);
+                if (!state.isGameActive) return; // 🔒 여기!!! 터치 전엔 게임 정지
+
 
             // 연사 처리
 if (isFiring && fireCooldown <= 0) {
@@ -505,7 +508,7 @@ if (isFiring && fireCooldown <= 0) {
 if (fireCooldown > 0) fireCooldown--;
 
             
-            requestAnimationFrame(animate);
+            
             if (state.isGameOver) return;
             const dt = clock.getDelta();
             const time = clock.getElapsedTime();
@@ -585,8 +588,8 @@ scene.remove(state.enemies[j]); state.enemies.splice(j,1); state.score+=100; hit
                             boss.userData.hp -= 20; hit=true; spawnDebris(b.mesh.position, 0xff0000); document.getElementById('boss-hp-fill').style.width = (boss.userData.hp/boss.userData.maxHp*100)+'%';
                            if (boss.userData.hp <= 0) {
     scene.remove(boss);
-                               player.hp += 20;
-                               player.hp = Math.min(player.hp, player.maxHp);
+                              state.hp += 20;
+state.hp = Math.min(state.hp, 100);
 
 
     boss = null;
