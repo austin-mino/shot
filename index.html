@@ -663,7 +663,7 @@ if (e !== boss && e.userData.isGunner) {
 
         fireBullet(
             true,
-            e.position.clone().add(new THREE.Vector3(0, 3, 0)),
+            e.position.clone().add(new THREE.Vector3(0, 1.6, 0)),
             dir
         );
 
@@ -741,7 +741,7 @@ player.position.add(knockDir);
 
                 fireBullet(
                     true,
-                    e.position.clone().add(new THREE.Vector3(0, 3, 0)),
+                    e.position.clone().add(new THREE.Vector3(0, 1.6, 0)),
                     new THREE.Vector3(Math.sin(angle), 0, Math.cos(angle))
                 );
             }
