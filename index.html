@@ -264,74 +264,75 @@ function box(w, h, d, x, y, z) {
 
     return mesh;
 }
-function createBusanMapOptimized() {
-    const mat = {
-        floor: new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.8 }),
-        wall: new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.2 }),
-        drum: new THREE.MeshStandardMaterial({ color: 0xFFD700 })
-    };
 
-    // 바닥
-    const ground = new THREE.Mesh(new THREE.BoxGeometry(200, 1, 200), mat.floor);
-    ground.position.y = -0.5; ground.userData.isFloor = true;
-    scene.add(ground); colliders.floors.push(ground);
 
-    // 건물 생성
-    function addBuilding(x, floors=3) {
-        const w=25, d=40, h=10, doorW=6, doorH=8;
 
-        for(let i=0;i<floors;i++){
-            const y = h/2 + i*h;
 
-            // 벽체: 좌우로 나눠 중앙 구멍 확보 (창문 느낌)
-            const leftWall = new THREE.Mesh(new THREE.BoxGeometry((w-doorW)/2, h, d), mat.wall);
-            leftWall.position.set(x - (doorW/2 + (w-doorW)/4), y, 0);
-            scene.add(leftWall); colliders.walls.push(leftWall);
+        function createCityMapWithPalette() {
+    // 전체 바닥
+    const matFloor = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.8 });
+    const ground = new THREE.Mesh(new THREE.BoxGeometry(200, 1, 200), matFloor);
+    ground.position.y = -0.5;
+    ground.userData.isFloor = true;
+    scene.add(ground);
+    colliders.floors.push(ground);
 
-            const rightWall = new THREE.Mesh(new THREE.BoxGeometry((w-doorW)/2, h, d), mat.wall);
-            rightWall.position.set(x + (doorW/2 + (w-doorW)/4), y, 0);
-            scene.add(rightWall); colliders.walls.push(rightWall);
+    const gridX = 5, gridZ = 5;
+    const spacing = 30;
 
-            // 경사로 유지
-            if(i>0){
-                const ramp = new THREE.Mesh(new THREE.BoxGeometry(6, 1, 10), mat.wall);
-                ramp.position.set(x, h*(i-1)+h/2, d/2 - 5);
-                ramp.rotation.x = -Math.atan(h / 10);
-                ramp.userData.isFloor = true;
-                scene.add(ramp); colliders.floors.push(ramp);
+    // 현실적인 도시 팔레트
+    const palette = [0xdedede, 0xc0b283, 0xa8997a, 0x8ca3b0, 0xb8b0a5];
+
+    for (let i = 0; i < gridX; i++) {
+        for (let j = 0; j < gridZ; j++) {
+            const w = 8 + Math.random() * 4;
+            const d = 8 + Math.random() * 4;
+            const h = 5;
+
+            const x = -75 + i * spacing + Math.random() * 5;
+            const z = -75 + j * spacing + Math.random() * 5;
+
+            const rotY = Math.PI / 2 * Math.floor(Math.random() * 4);
+
+            // 건물 재질: 팔레트에서 랜덤 선택
+            const matWall = new THREE.MeshStandardMaterial({ 
+                color: palette[Math.floor(Math.random() * palette.length)], 
+                roughness: 0.3 
+            });
+            const house = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), matWall);
+            house.position.set(x, h / 2, z);
+            house.rotation.y = rotY;
+            scene.add(house);
+            colliders.walls.push(house);
+
+            // 경사로 (회색)
+            const rampLength = 6;
+            const rampWidth = 4;
+            const rampHeight = h;
+            const matRamp = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.3 });
+            const ramp = new THREE.Mesh(new THREE.BoxGeometry(rampWidth, 1, rampLength), matRamp);
+
+            const dir = Math.floor(Math.random() * 4);
+            switch (dir) {
+                case 0: ramp.position.set(x + w/2 + rampWidth/2, rampHeight/2, z); ramp.rotation.y = 0; break;
+                case 1: ramp.position.set(x - w/2 - rampWidth/2, rampHeight/2, z); ramp.rotation.y = 0; break;
+                case 2: ramp.position.set(x, rampHeight/2, z + d/2 + rampWidth/2); ramp.rotation.y = Math.PI/2; break;
+                case 3: ramp.position.set(x, rampHeight/2, z - d/2 - rampWidth/2); ramp.rotation.y = Math.PI/2; break;
             }
+            ramp.rotation.x = -Math.atan(rampHeight / rampLength);
+            ramp.userData.isFloor = true;
+            scene.add(ramp);
+            colliders.floors.push(ramp);
         }
-
-        // 입구
-        const door = new THREE.Mesh(new THREE.BoxGeometry(doorW, doorH, 2), mat.wall);
-        door.position.set(x, doorH/2, d/2 + 0.5);
-        scene.add(door); colliders.walls.push(door);
     }
 
-    [-60,60].forEach(x => addBuilding(x));
-
-    // 중앙 광장 북 (크기 줄임, 세그먼트 8)
-    const drum = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 3, 8), mat.drum);
-    drum.position.y = 1.5; scene.add(drum);
-
-    // 맵 경계 (최소 박스 유지)
-    const wallH = 15;
-    [
-        [[0, wallH/2,100],[200, wallH, 2]],
-        [[0, wallH/2,-100],[200, wallH, 2]],
-        [[-100, wallH/2,0],[2, wallH, 200]],
-        [[100, wallH/2,0],[2, wallH, 200]]
-    ].forEach(([pos,size])=>{
-        const w = new THREE.Mesh(new THREE.BoxGeometry(...size), mat.wall);
-        w.position.set(...pos); scene.add(w); colliders.walls.push(w);
-    });
-
     // 단일 조명
-    const light = new THREE.PointLight(0x00ffff, 1, 200);
-    light.position.set(0,50,0); scene.add(light);
+    const light = new THREE.PointLight(0xffffff, 1, 500);
+    light.position.set(0, 100, 0);
+    scene.add(light);
 }
 
-createBusanMapOptimized();
+createCityMapWithPalette();
 
 
 
