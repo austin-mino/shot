@@ -265,9 +265,7 @@ function box(w, h, d, x, y, z) {
     return mesh;
 }
 
-
-
-function createBusanMapSimplified() {
+function createBusanMapLightweight() {
     const mat = {
         floor: new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.8 }),
         wall: new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.2 }),
@@ -275,64 +273,67 @@ function createBusanMapSimplified() {
     };
 
     // 바닥
-    const ground = new THREE.Mesh(new THREE.BoxGeometry(200,1,200), mat.floor);
+    const ground = new THREE.Mesh(new THREE.BoxGeometry(200, 1, 200), mat.floor);
     ground.position.y = -0.5; ground.userData.isFloor = true;
     scene.add(ground); colliders.floors.push(ground);
 
     // 건물 생성
-    function addBuilding(x, floors=3) {
-        const w=25, d=40, h=10, doorW=6, doorH=8;
-        for(let i=0;i<floors;i++){
-            const y = h/2 + i*h;
-            // 벽체를 좌우로 나누어 구멍(창문) 위치 확보
-            const leftWall = new THREE.Mesh(new THREE.BoxGeometry((w-doorW)/2,h,d), mat.wall);
-            leftWall.position.set(x - (doorW/2 + (w-doorW)/4), y, 0);
+    function addBuilding(x, floors = 3) {
+        const w = 25, d = 40, h = 10, doorW = 6, doorH = 8;
+        for (let i = 0; i < floors; i++) {
+            const y = h / 2 + i * h;
+
+            // 벽체: 좌우로 나누어 구멍 확보
+            const leftWall = new THREE.Mesh(new THREE.BoxGeometry((w - doorW) / 2, h, d), mat.wall);
+            leftWall.position.set(x - (doorW/2 + (w - doorW)/4), y, 0);
             scene.add(leftWall); colliders.walls.push(leftWall);
 
-            const rightWall = new THREE.Mesh(new THREE.BoxGeometry((w-doorW)/2,h,d), mat.wall);
-            rightWall.position.set(x + (doorW/2 + (w-doorW)/4), y, 0);
+            const rightWall = new THREE.Mesh(new THREE.BoxGeometry((w - doorW) / 2, h, d), mat.wall);
+            rightWall.position.set(x + (doorW/2 + (w - doorW)/4), y, 0);
             scene.add(rightWall); colliders.walls.push(rightWall);
 
-            // 경사로
-            if(i>0){
-                const rampLength=15,rampHeight=h;
-                const ramp = new THREE.Mesh(new THREE.BoxGeometry(6,1,rampLength), mat.wall);
-                ramp.position.set(x, h*(i-1)+rampHeight/2, d/2 - rampLength/2);
-                ramp.rotation.x = -Math.atan(rampHeight/rampLength);
-                ramp.userData.isFloor = true; scene.add(ramp); colliders.floors.push(ramp);
+            // 경사로는 선택적: i>0인 경우만, 최소 크기
+            if (i > 0) {
+                const ramp = new THREE.Mesh(new THREE.BoxGeometry(4, 1, 10), mat.wall);
+                ramp.position.set(x, h*(i-1)+h/2, d/2 - 5);
+                ramp.rotation.x = -Math.atan(h / 10);
+                ramp.userData.isFloor = true;
+                scene.add(ramp); colliders.floors.push(ramp);
             }
         }
 
         // 입구
-        const door = new THREE.Mesh(new THREE.BoxGeometry(doorW,doorH,2), mat.wall);
+        const door = new THREE.Mesh(new THREE.BoxGeometry(doorW, doorH, 2), mat.wall);
         door.position.set(x, doorH/2, d/2 + 0.5);
         scene.add(door); colliders.walls.push(door);
     }
 
-    [-60,60].forEach(x => addBuilding(x));
+    [-60, 60].forEach(x => addBuilding(x));
 
-    // 중앙 광장 북
-    const drum = new THREE.Mesh(new THREE.CylinderGeometry(4,4,5,32), mat.drum);
-    drum.position.y = 2.5; scene.add(drum);
+    // 중앙 광장 북 (초경량)
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 3, 8), mat.drum);
+    drum.position.y = 1.5;
+    scene.add(drum);
 
     // 맵 경계
-    const wallH=15;
+    const wallH = 15;
     [
-        [[0, wallH/2,100],[200,wallH,2]],
-        [[0, wallH/2,-100],[200,wallH,2]],
-        [[-100, wallH/2,0],[2,wallH,200]],
-        [[100, wallH/2,0],[2,wallH,200]]
+        [[0, wallH/2, 100],[200, wallH, 2]],
+        [[0, wallH/2, -100],[200, wallH, 2]],
+        [[-100, wallH/2, 0],[2, wallH, 200]],
+        [[100, wallH/2, 0],[2, wallH, 200]]
     ].forEach(([pos,size])=>{
-        const w=new THREE.Mesh(new THREE.BoxGeometry(...size), mat.wall);
+        const w = new THREE.Mesh(new THREE.BoxGeometry(...size), mat.wall);
         w.position.set(...pos); scene.add(w); colliders.walls.push(w);
     });
 
-    // 조명
-    const light = new THREE.PointLight(0x00ffff,1,200);
-    light.position.set(0,50,0); scene.add(light);
+    // 단일 조명
+    const light = new THREE.PointLight(0x00ffff, 1, 200);
+    light.position.set(0, 50, 0);
+    scene.add(light);
 }
 
-createBusanMapSimplified();
+createBusanMapLightweight();
 
 
 
