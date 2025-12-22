@@ -274,19 +274,23 @@ scene.fog = new THREE.FogExp2(0x87ceeb, 0.001);
 
 // 지도 관리
 const generatedPositions = new Set(); // "x_z" -> 이미 생성된 위치 기록
-const spacing = 20; // 건물 간격
+const spacing = 25; // 건물 간격
 const viewDistance = 3; // 플레이어 주변 몇 칸까지 생성
+const groundY = 18.3;
 
-function createGround(x, z, size = 50) {
+// 기본 땅
+function createGround(size = 1000) {
     const matGround = new THREE.MeshStandardMaterial({ color: 0x228B22, roughness: 0.9 });
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size), matGround);
     ground.rotation.x = -Math.PI / 2;
-    ground.position.set(x, 20, z);
+    ground.position.set(0, groundY, 0);
     ground.userData.isFloor = true;
     colliders.floors.push(ground);
     scene.add(ground);
 }
+createGround();
 
+// 건물 생성
 function createBuilding(x, z) {
     const floorMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.8 });
     const wallColors = [0xdedede, 0xc0b283, 0xa8997a, 0x8ca3b0, 0xb8b0a5];
@@ -302,23 +306,23 @@ function createBuilding(x, z) {
     // 바닥
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), floorMat);
     floor.rotation.x = -Math.PI / 2;
-    floor.position.set(x, 20, z);
+    floor.position.set(x, groundY, z);
     floor.userData.isFloor = true;
     colliders.floors.push(floor);
 
     // 건물
     const building = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), wallMat);
-    building.position.set(x, 20 + height / 2, z);
+    building.position.set(x, groundY + height / 2, z);
     colliders.walls.push(building);
 
     // 옥상
     const roof = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), floorMat);
     roof.rotation.x = -Math.PI / 2;
-    roof.position.set(x, 20 + height, z);
+    roof.position.set(x, groundY + height, z);
     roof.userData.isFloor = true;
     colliders.floors.push(roof);
 
-    // 경사로 랜덤 생성
+    // 경사로
     if (Math.random() < 0.5) {
         const rampLength = 6 + Math.random() * 4;
         const ramp = new THREE.Mesh(
@@ -326,7 +330,7 @@ function createBuilding(x, z) {
             new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.3 })
         );
         ramp.rotation.x = -Math.atan2(height, rampLength);
-        ramp.position.set(x + width / 2 + rampLength / 2, 20 + height / 2, z);
+        ramp.position.set(x + width / 2 + rampLength / 2, groundY + height / 2, z);
         ramp.userData.isFloor = true;
         colliders.floors.push(ramp);
         scene.add(ramp);
@@ -335,18 +339,19 @@ function createBuilding(x, z) {
     scene.add(floor, building, roof);
 }
 
+// 광장 생성
 function createPlaza(x, z) {
     const size = 15 + Math.random() * 10;
     const matPlaza = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.8 });
     const plaza = new THREE.Mesh(new THREE.PlaneGeometry(size, size), matPlaza);
     plaza.rotation.x = -Math.PI / 2;
-    plaza.position.set(x, 20, z);
+    plaza.position.set(x, groundY, z);
     plaza.userData.isFloor = true;
     colliders.floors.push(plaza);
     scene.add(plaza);
 }
 
-// 플레이어 주변 무한 도시 생성
+// 플레이어 주변 도시 생성
 function updateCity(playerX, playerZ) {
     const px = Math.floor(playerX / spacing);
     const pz = Math.floor(playerZ / spacing);
@@ -355,11 +360,10 @@ function updateCity(playerX, playerZ) {
         for (let dz = -viewDistance; dz <= viewDistance; dz++) {
             const key = `${px + dx}_${pz + dz}`;
             if (!generatedPositions.has(key)) {
-                const x = (px + dx) * spacing + (Math.random() - 0.5) * 5;
-                const z = (pz + dz) * spacing + (Math.random() - 0.5) * 5;
+                const x = (px + dx) * spacing + (Math.random() - 0.5) * 10;
+                const z = (pz + dz) * spacing + (Math.random() - 0.5) * 10;
 
-                // 랜덤으로 광장/건물 결정
-                if (Math.random() < 0.15) {
+                if (Math.random() < 0.2) {
                     createPlaza(x, z);
                 } else {
                     createBuilding(x, z);
@@ -370,10 +374,6 @@ function updateCity(playerX, playerZ) {
         }
     }
 }
-
-// 전체 맵 기본 땅
-createGround(0, 0, 1000); // 충분히 넓게 깔기
-
 
 
 
@@ -717,7 +717,10 @@ updateGround(boss);
     const time = clock.getElapsedTime();
 
     // 2. 환경/플레이어
-   
+   // 플레이어 위치에 따라 주변 도시 생성
+    const playerX = camera.position.x;
+    const playerZ = camera.position.z;
+    updateCity(playerX, playerZ);
     if (!player.userData.isGrounded) updateGround(player);
 
     // 3. 플레이어 총알 연사
