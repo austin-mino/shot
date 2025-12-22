@@ -144,8 +144,8 @@ cameraMode: 'TPS',
         // --- 2. 씬 & 렌더러 ---
         const scene = new THREE.Scene();
         const colliders = { floors: [], walls: [] };
-        scene.background = new THREE.Color(0x050505);
-        scene.fog = new THREE.FogExp2(0x050505, 0.015);
+        scene.background = new THREE.Color(0x0b1020);
+        scene.fog = new THREE.FogExp2(0x050505, 0.008);
 
         const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -154,7 +154,16 @@ cameraMode: 'TPS',
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         document.body.appendChild(renderer.domElement);
 
-        scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.5));
+       scene.add(new THREE.HemisphereLight(0x88aaff, 0x222233, 0.8));
+
+const arenaLight = new THREE.PointLight(0x00ffff, 1.2, 120);
+arenaLight.position.set(0, 30, 0);
+scene.add(arenaLight);
+
+const warmLight = new THREE.PointLight(0xff8844, 0.6, 80);
+warmLight.position.set(40, 20, 40);
+scene.add(warmLight);
+
         const dirLight = new THREE.DirectionalLight(0xffeedd, 1.2);
         dirLight.position.set(50, 100, 50); dirLight.castShadow = true;
         dirLight.shadow.mapSize.set(2048, 2048);
@@ -235,8 +244,19 @@ cameraMode: 'TPS',
 
 function createUrbanMap(scene, colliders) {
 
-    const floorMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
-    const wallMat  = new THREE.MeshStandardMaterial({ color: 0x666666 });
+  const floorMat = new THREE.MeshStandardMaterial({
+    color: 0x101820,     // 거의 블랙에 가까운 블루
+    roughness: 0.85,
+    metalness: 0.1
+});
+
+const wallMat = new THREE.MeshStandardMaterial({
+    color: 0xbfc7d5,     // 밝은 콘크리트
+    roughness: 0.5,
+    metalness: 0.15
+});
+
+
 
     function floor(x, y, z, w, h, d, rx = 0, rz = 0) {
         const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), floorMat);
@@ -247,6 +267,16 @@ function createUrbanMap(scene, colliders) {
         m.geometry.computeBoundingBox();
         scene.add(m);
         colliders.floors.push(m);
+        const edge = new THREE.LineSegments(
+    new THREE.EdgesGeometry(m.geometry),
+    new THREE.LineBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 0.25
+    })
+);
+m.add(edge);
+
     }
 
     function wall(x, y, z, w, h, d) {
