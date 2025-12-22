@@ -265,56 +265,88 @@ function box(w, h, d, x, y, z) {
     return mesh;
 }
 
-function generateDenseStructures() {
-    const size = 700;
-    const step = 20;
 
-    for (let x = -size; x <= size; x += step) {
-        for (let z = -size; z <= size; z += step) {
+function createFullMap() {
 
-            if (Math.random() < 0.45) continue; // 골목 생성
+    /* =========================
+       1️⃣ 전체 바닥
+    ========================= */
+    const mainFloor = box(900, 2, 400, 0, -1, 0);
+    mainFloor.material.color.set(0x0f141c);
+    mainFloor.userData.isFloor = true;
 
-            const w = 6 + Math.random() * 10;
-            const d = 6 + Math.random() * 10;
-            const h = 2 + Math.random() * 12;
+    /* =========================
+       2️⃣ 양쪽 대형 건물 2개
+       - 내부 이동 가능
+       - 2,3층
+       - 외부로 나가는 구멍
+    ========================= */
+    [-260, 260].forEach(x => {
+        const width = 140;
+        const depth = 90;
+        const floorH = 6;
 
-            const y = h / 2;
-
-            const m = box(w, h, d, x, y, z);
-
-            // 🎨 색 랜덤
-            m.material.color.setHSL(
-                0.55 + Math.random() * 0.1,
-                0.2,
-                0.2 + Math.random() * 0.25
-            );
-
-            m.userData.isStructure = true;
-
-            if (Math.random() < 0.35) {
-    const top = box(
-        w * 0.6,
-        1,
-        d * 0.6,
-        x,
-        h + 0.5,
-        z
-    );
-    top.material.color.offsetHSL(0, 0, 0.05);
-}
-
-if (Math.random() < 0.4) {
-    for (let i = -1; i <= 1; i += 2) {
-        box(1, h, 1, x + i * (w / 2), h / 2, z + i * (d / 2));
-    }
-}
-
+        // 외형 3층
+        for (let i = 0; i < 3; i++) {
+            box(width, floorH, depth, x, floorH / 2 + floorH * i, 0);
         }
+
+        // 내부 바닥
+        for (let i = 0; i < 3; i++) {
+            const f = box(
+                width - 12,
+                1,
+                depth - 12,
+                x,
+                floorH * i + 1,
+                0
+            );
+            f.material.color.set(0x1a202c);
+            f.userData.isFloor = true;
+        }
+
+        // 2층 출구
+        box(26, 8, 2, x, floorH * 1.5, depth / 2)
+            .material.color.set(0x000000);
+
+        // 3층 출구
+        box(26, 8, 2, x, floorH * 2.5, -depth / 2)
+            .material.color.set(0x000000);
+    });
+
+    /* =========================
+       3️⃣ 중앙 광장
+    ========================= */
+    const plaza = box(320, 1, 320, 0, 0, 0);
+    plaza.material.color.set(0x1a1f2a);
+    plaza.userData.isFloor = true;
+
+    /* =========================
+       4️⃣ 중앙 분수
+    ========================= */
+    const fountainBase = box(50, 3, 50, 0, 1.5, 0);
+    fountainBase.material.color.set(0x2a2f3a);
+
+    const fountainPillar = box(12, 14, 12, 0, 10, 0);
+    fountainPillar.material.color.set(0x3a4a6a);
+
+    /* =========================
+       5️⃣ 광장 구조물 (엄폐물)
+    ========================= */
+    for (let i = 0; i < 18; i++) {
+        const x = (Math.random() - 0.5) * 220;
+        const z = (Math.random() - 0.5) * 220;
+
+        const w = 6 + Math.random() * 10;
+        const h = 3 + Math.random() * 7;
+        const d = 6 + Math.random() * 10;
+
+        box(w, h, d, x, h / 2, z);
     }
 }
 
+        createFullMap();
 
-        generateDenseStructures();
 
 
 
