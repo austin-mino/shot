@@ -144,8 +144,8 @@ cameraMode: 'TPS',
         // --- 2. 씬 & 렌더러 ---
         const scene = new THREE.Scene();
         const colliders = { floors: [], walls: [] };
-        scene.background = new THREE.Color(0x0b1020);
-        scene.fog = new THREE.FogExp2(0x050505, 0.008);
+        scene.background = new THREE.Color(0x1b2a4a);
+        scene.fog = new THREE.FogExp2(0x1b2a4a, 0.004);
 
         const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 500);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -168,6 +168,10 @@ scene.add(warmLight);
         dirLight.position.set(50, 100, 50); dirLight.castShadow = true;
         dirLight.shadow.mapSize.set(2048, 2048);
         scene.add(dirLight);
+        // ⭐ 전체 밝기 보정용 필라이트
+const fillLight = new THREE.AmbientLight(0x8899ff, 0.35);
+scene.add(fillLight);
+
 
        
 
@@ -240,14 +244,16 @@ scene.add(warmLight);
         }
 
         const player = createDetailedHumanoid(0x0088ff, true);
+        player.position.set(0, 1.6, 0); // 바닥 위 정확한 높이
+
         scene.add(player);
 
 function createUrbanMap(scene, colliders) {
 
   const floorMat = new THREE.MeshStandardMaterial({
-    color: 0x101820,     // 거의 블랙에 가까운 블루
-    roughness: 0.85,
-    metalness: 0.1
+     color: 0x1e2f3f,
+    roughness: 0.75,
+    metalness: 0.15
 });
 
 const wallMat = new THREE.MeshStandardMaterial({
@@ -325,6 +331,8 @@ m.add(edge);
         // 게임 시작
         startScreen.addEventListener('click', () => { 
             state.isGameActive = true; 
+                updateGround(player); // ⭐ 바닥 강제 정렬
+
             document.body.requestPointerLock(); 
             startScreen.style.display = 'none';
         });
@@ -568,7 +576,7 @@ if (isMobile) {
     state.bossSpawned = true;
 
     // 보스 생성
-    boss = createDetailedHumanoid(0xff0000, false, 5);
+    boss = createDetailedHumanoid(0xff0000, false, 2.5);
 
     // 기본 위치
     boss.position.set(
