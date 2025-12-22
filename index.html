@@ -697,383 +697,270 @@ updateGround(boss);
             }
         }
 
-        function animate() {
-            if (state.isGameActive) {
-    updateChunks(player.position.x, player.position.z); // ✅ 추가
-}
+       function animate() {
+    requestAnimationFrame(animate);
 
-requestAnimationFrame(animate);
-                if (!state.isGameActive) return; // 🔒 여기!!! 터치 전엔 게임 정지
-            if (state.isGameActive && !player.userData.isGrounded) {
+    if (!state.isGameActive) return;
+
+    const dt = clock.getDelta();
+    const time = clock.getElapsedTime();
+
+    // --- 청크 업데이트 ---
+    updateChunks(player.position.x, player.position.z);
+
+    // --- 바닥 체크 ---
+    if (!player.userData.isGrounded) updateGround(player);
+
+    // --- 총알 연사 ---
+    if (isFiring && fireCooldown <= 0) {
+        fireBullet();
+        fireCooldown = 6;
+    }
+    if (fireCooldown > 0) fireCooldown--;
+
+    if (state.isGameOver) return;
+
+    // --- 카메라 ---
+    const targetPos = player.position.clone().add(new THREE.Vector3(0, 1.6, 0));
+
+    if (!isMobile) {
+        const currentRadius = state.cameraMode === 'TPS' ? state.cam.radius : 0.1;
+        const offsetX = currentRadius * Math.sin(state.cam.phi) * Math.sin(state.cam.theta);
+        const offsetY = currentRadius * Math.cos(state.cam.phi);
+        const offsetZ = currentRadius * Math.sin(state.cam.phi) * Math.cos(state.cam.theta);
+
+        camera.position.copy(targetPos).add(new THREE.Vector3(offsetX, offsetY, offsetZ));
+        camera.lookAt(targetPos);
+
+        player.rotation.y = state.cam.theta + Math.PI;
+    } else {
+        camera.position.lerp(player.position.clone().add(new THREE.Vector3(0, 15, 12)), 0.1);
+        camera.lookAt(player.position);
+    }
+
+    // --- 플레이어 이동 ---
+    const fwd = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), player.rotation.y);
+    const right = new THREE.Vector3(-1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), player.rotation.y);
+
+    const move = new THREE.Vector3();
+    if (input.w) move.add(fwd); 
+    if (input.s) move.sub(fwd);
+    if (input.d) move.add(right); 
+    if (input.a) move.sub(right);
+
+    if (isMobile && (input.joyX || input.joyY)) {
+        move.set(input.joyX, 0, input.joyY);
+        if (move.lengthSq() > 0.01) player.rotation.y = -Math.atan2(input.joyY, input.joyX) + Math.PI/2;
+    }
+
+    move.normalize().multiplyScalar(0.25);
+
+    player.position.x += move.x; if (checkCollision(player.position, player.userData.boxSize).hit) player.position.x -= move.x;
+    player.position.z += move.z; if (checkCollision(player.position, player.userData.boxSize).hit) player.position.z -= move.z;
+
+    // 점프
+    if (input.space && player.userData.isGrounded) {
+        player.userData.velocity.y = physics.jump;
+        player.userData.isGrounded = false;
+    }
+
+    // 중력
+    player.userData.velocity.y += physics.gravity;
+    player.position.y += player.userData.velocity.y;
+
     updateGround(player);
-}
 
-            // 연사 처리
-if (isFiring && fireCooldown <= 0) {
-    fireBullet();
-    fireCooldown = 6; // 작을수록 연사 빠름
-}
-if (fireCooldown > 0) fireCooldown--;
+    // --- 총알 업데이트 ---
+    for (let i = state.bullets.length - 1; i >= 0; i--) {
+        const b = state.bullets[i];
+        b.mesh.position.add(b.velocity);
+        b.life--;
 
-            
-            
-            if (state.isGameOver) return;
-            const dt = clock.getDelta();
-            const time = clock.getElapsedTime();
+        let hit = false;
 
-            // 1. 카메라 업데이트 (구면 궤도)
-            // 카메라 위치: 플레이어 머리(중심) + 구면 좌표 오프셋
-            const targetPos = player.position.clone().add(new THREE.Vector3(0, 1.6, 0)); // 머리 중심
-            
-            if (!isMobile) {
-                // PC: 마우스 회전에 따른 궤도 계산
-                // FPS 모드면 반지름 0
-                const currentRadius = state.cameraMode === 'TPS' ? state.cam.radius : 0.1;
-                
-                // 구면 -> 직교 변환
-                const offsetX = currentRadius * Math.sin(state.cam.phi) * Math.sin(state.cam.theta);
-                const offsetY = currentRadius * Math.cos(state.cam.phi);
-                const offsetZ = currentRadius * Math.sin(state.cam.phi) * Math.cos(state.cam.theta);
-                
-                camera.position.copy(targetPos).add(new THREE.Vector3(offsetX, offsetY, offsetZ));
-                camera.lookAt(targetPos);
+        for (const wall of colliders.walls) {
+            wall.userData.box.copy(wall.geometry.boundingBox).applyMatrix4(wall.matrixWorld);
+            if (wall.userData.box.containsPoint(b.mesh.position)) { hit = true; break; }
+        }
 
-                // 플레이어 회전 동기화 (카메라가 보는 수평 방향을 봄)
-                // 카메라는 targetPos를 보므로, 플레이어는 카메라의 뒤쪽(나를 찍는 방향)의 반대, 즉 카메라가 보는 방향을 봐야 함
-                if (state.cameraMode === 'TPS' || state.cameraMode === 'FPS') {
-                     // theta가 0일 때 +Z를 봄 (Three.js 기본). 
-                     // 카메라는 theta에서 플레이어를 봄. 플레이어는 theta + PI를 봐야 정면.
-                     player.rotation.y = state.cam.theta + Math.PI; 
+        if (!hit) {
+            if (b.isEnemy) {
+                if (b.mesh.position.distanceTo(player.position.clone().add(new THREE.Vector3(0,1,0))) < 1.0) {
+                    state.hp -= 10; hit = true;
+                    const overlay = document.getElementById('damage-overlay');
+                    overlay.style.opacity = 0.6;
+                    setTimeout(() => overlay.style.opacity = 0, 200);
                 }
             } else {
-                // 모바일: 쿼터뷰
-                camera.position.lerp(player.position.clone().add(new THREE.Vector3(0, 15, 12)), 0.1);
-                camera.lookAt(player.position);
-            }
-
-            // 2. 이동 (플레이어가 보는 방향 기준)
-            const fwd = new THREE.Vector3(0,0,1).applyAxisAngle(new THREE.Vector3(0,1,0), player.rotation.y);
-            const right = new THREE.Vector3(-1,0,0).applyAxisAngle(new THREE.Vector3(0,1,0), player.rotation.y); // 좌우 반전 체크
-            
-            const move = new THREE.Vector3();
-            if(input.w) move.add(fwd); if(input.s) move.sub(fwd); 
-            if(input.d) move.add(right); if(input.a) move.sub(right);
-            
-            if(isMobile && (input.joyX||input.joyY)) { 
-                move.set(input.joyX, 0, input.joyY); 
-                if(move.lengthSq() > 0.01) player.rotation.y = -Math.atan2(input.joyY, input.joyX) + Math.PI/2; 
-            }
-            
-            move.normalize().multiplyScalar(0.25);
-
-            player.position.x += move.x; if(checkCollision(player.position, player.userData.boxSize).hit) player.position.x -= move.x;
-            player.position.z += move.z; if(checkCollision(player.position, player.userData.boxSize).hit) player.position.z -= move.z;
-
-            // 점프 & 중력
-           // 점프
-// ===== 점프 =====
-if (input.space && player.userData.isGrounded) {
-    player.userData.velocity.y = physics.jump;
-    player.userData.isGrounded = false;
-}
-
-// ===== 중력 =====
-player.userData.velocity.y += physics.gravity;
-player.position.y += player.userData.velocity.y;
-
-// ===== 바닥 판정은 항상 마지막 =====
-updateGround(player);
-
-
-
-            // 3. 총알 업데이트
-            for (let i = state.bullets.length - 1; i >= 0; i--) {
-                const b = state.bullets[i]; b.mesh.position.add(b.velocity); b.life--;
-                let hit = false;
-                if(!hit) { for (const wall of colliders.walls) {
-    wall.userData.box.copy(wall.geometry.boundingBox)
-        .applyMatrix4(wall.matrixWorld);
-
-    if (wall.userData.box.containsPoint(b.mesh.position)) {
-        hit = true;
-        break;
-    }
-}
- }
-                if (!hit) {
-                    if (b.isEnemy) { 
-                        if(b.mesh.position.distanceTo(player.position.clone().add(new THREE.Vector3(0,1,0))) < 1.0) { state.hp -= 10; hit=true; document.getElementById('damage-overlay').style.opacity = 0.6; setTimeout(()=>document.getElementById('damage-overlay').style.opacity=0, 200); }
-                    } else {
-                        for(let j=state.enemies.length-1; j>=0; j--) {
-                            if(state.enemies[j].position.distanceTo(b.mesh.position) < 1.5) { spawnDebris(state.enemies[j].position, 0xff4444); if (state.enemies[j].userData.isGunner) {
-    state.gunnerCount--;
-}
-scene.remove(state.enemies[j]); state.enemies.splice(j,1); state.score+=100; hit=true; break; }
-                        }
-                        if(!hit && boss && boss.position.distanceTo(b.mesh.position) < 4) {
-                            boss.userData.hp -= 20; hit=true; spawnDebris(b.mesh.position, 0xff0000); document.getElementById('boss-hp-fill').style.width = (boss.userData.hp/boss.userData.maxHp*100)+'%';
-                           if (boss.userData.hp <= 0) {
-    scene.remove(boss);
-                              state.hp += 20;
-state.hp = Math.min(state.hp, 100);
-
-
-    boss = null;
-    state.bossSpawned = false;
-
-    document.getElementById('boss-ui').style.display = 'none';
-}
-
-                        }
+                for (let j = state.enemies.length - 1; j >= 0; j--) {
+                    if (state.enemies[j].position.distanceTo(b.mesh.position) < 1.5) {
+                        spawnDebris(state.enemies[j].position, 0xff4444);
+                        if (state.enemies[j].userData.isGunner) state.gunnerCount--;
+                        scene.remove(state.enemies[j]);
+                        state.enemies.splice(j, 1);
+                        state.score += 100;
+                        hit = true; 
+                        break;
                     }
                 }
-                if (hit || b.life <= 0) {
-    scene.remove(b.mesh);
-    state.bullets.splice(i, 1);
-}
 
-            }
+                if (!hit && boss && boss.position.distanceTo(b.mesh.position) < 4) {
+                    boss.userData.hp -= 20; hit = true;
+                    spawnDebris(b.mesh.position, 0xff0000);
+                    document.getElementById('boss-hp-fill').style.width = (boss.userData.hp / boss.userData.maxHp * 100) + '%';
 
-            // ===== 보스 페이즈 판정 =====
-if (boss) {
-    const hpRate = boss.userData.hp / boss.userData.maxHp;
-
-    if (hpRate <= 0.3) boss.userData.phase = 3;
-    else if (hpRate <= 0.7) boss.userData.phase = 2;
-    else boss.userData.phase = 1;
-}
-if (boss) {
-    if (boss.userData.lastPhase !== boss.userData.phase) {
-        boss.userData.lastPhase = boss.userData.phase;
-
-        // UI 텍스트
-        document.getElementById('boss-phase').innerText =
-            `PHASE ${boss.userData.phase}`;
-
-        // 체력바 색상 변경
-        const fill = document.getElementById('boss-hp-fill');
-        fill.style.background =
-            boss.userData.phase === 1
-                ? 'linear-gradient(90deg, #ff5555, #ff2222)'
-                : boss.userData.phase === 2
-                ? 'linear-gradient(90deg, #ffaa00, #ff7700)'
-                : 'linear-gradient(90deg, #aa00ff, #ff00aa)';
-
-        // ⚠ 페이즈 전환 메시지
-        const msg = document.getElementById('boss-msg');
-        msg.innerText = `⚠ PHASE ${boss.userData.phase} ⚠`;
-        msg.style.display = 'block';
-        setTimeout(() => msg.style.display = 'none', 1500);
-    }
-}
-
-
-            // 4. 적 스폰 & AI
-            if(state.score >= state.nextBossScore && !state.bossSpawned) { spawnBoss(); state.nextBossScore += 5000; }
-           if(!boss && state.enemies.length < 15 && Math.random() < 0.03) {
-    const e = createDetailedHumanoid(0xff4444, false);
-    const a = Math.random()*6.28;
-    const r = 30+Math.random()*20;
-
-    // x,z만 지정 (y는 위에서 시작)
-    e.position.set(
-        player.position.x + Math.cos(a) * r,
-        20,
-        player.position.z + Math.sin(a) * r
-    );
-
-    // 🔒 플레이어와 동일 처리
-    e.userData.velocity.y = 0;
-    updateGround(e);
-
-                
-                // 🔫 GUNNER 설정 (최대 3명)
-    if (state.gunnerCount < 3) {
-        e.userData.isGunner = true;
-        e.userData.shootCooldown = Math.random() * 1.5;
-        state.gunnerCount++;
-
-        // 색으로 구분
-        e.traverse(obj => {
-            if (obj.isMesh && obj.material) {
-                obj.material = obj.material.clone();
-                obj.material.color.set(0xffaa00);
-            }
-        });
-    }
-                scene.add(e); state.enemies.push(e);
-            }
-          
-
-
-            const allEnemies = [...state.enemies]; if(boss) allEnemies.push(boss);
-            allEnemies.forEach(e => {updateEnemyGround(e);
-// ======================
-// 🔫 GUNNER ENEMY ATTACK
-// ======================
-if (e !== boss && e.userData.isGunner) {
-    e.userData.shootCooldown -= dt;
-
-    if (e.userData.shootCooldown <= 0) {
-        const dir = new THREE.Vector3()
-            .subVectors(player.position, e.position)
-            .normalize();
-
-        fireBullet(
-            true,
-            e.position.clone().add(new THREE.Vector3(0, 1.6, 0)),
-            dir
-        );
-
-        e.userData.shootCooldown = 2.2;
-    }
-}
-
-                const dist = e.position.distanceTo(player.position); e.lookAt(player.position.x, e.position.y, player.position.z);
-                if(dist > (e===boss?8:1.2)) {
-                    const speed = e===boss ? 0.06 : 0.1; const moveDir = new THREE.Vector3(0,0,1).applyQuaternion(e.quaternion);
-                    const oldX = e.position.x; e.position.x += moveDir.x * speed; if(checkCollision(e.position, e.userData.boxSize).hit) e.position.x = oldX;
-                    const oldZ = e.position.z; e.position.z += moveDir.z * speed; if(checkCollision(e.position, e.userData.boxSize).hit) e.position.z = oldZ;
+                    if (boss.userData.hp <= 0) {
+                        scene.remove(boss);
+                        state.hp += 20; state.hp = Math.min(state.hp, 100);
+                        boss = null; state.bossSpawned = false;
+                        document.getElementById('boss-ui').style.display = 'none';
+                    }
                 }
-              
-if (e === boss) {
-    e.userData.attackTimer += dt;
-// ============================
-// 👊 BOSS MELEE ATTACK
-// ============================
-    const distToPlayer = e.position.distanceTo(player.position);
+            }
+        }
 
-    if (distToPlayer < e.userData.meleeRange) {
-        e.userData.meleeCooldown -= dt;
-
-        if (e.userData.meleeCooldown <= 0) {
-            // 💥 데미지
-            state.hp -= e.userData.meleeDamage * e.userData.phase;
-const knockDir = new THREE.Vector3()
-    .subVectors(player.position, e.position)
-    .normalize()
-    .multiplyScalar(0.8);
-player.position.add(knockDir);
-
-            // 피격 연출
-            const overlay = document.getElementById('damage-overlay');
-            overlay.style.opacity = 0.7;
-            setTimeout(() => overlay.style.opacity = 0, 200);
-
-            // 쿨타임 리셋
-            e.userData.meleeCooldown = 1.2;
-
-            // 간단한 타격 모션
-            e.userData.rArm.root.rotation.x = -1.5;
-            setTimeout(() => {
-                e.userData.rArm.root.rotation.x = 0;
-            }, 200);
+        if (hit || b.life <= 0) {
+            scene.remove(b.mesh);
+            state.bullets.splice(i, 1);
         }
     }
-}
 
-    const phase = e.userData.phase;
-    const type = e.userData.type;
+    // --- 보스 페이즈 처리 ---
+    if (boss) {
+        const hpRate = boss.userData.hp / boss.userData.maxHp;
+        if (hpRate <= 0.3) boss.userData.phase = 3;
+        else if (hpRate <= 0.7) boss.userData.phase = 2;
+        else boss.userData.phase = 1;
 
-    const attackDelay =
-        phase === 1 ? 2.5 :
-        phase === 2 ? 1.6 : 0.9;
+        if (boss.userData.lastPhase !== boss.userData.phase) {
+            boss.userData.lastPhase = boss.userData.phase;
 
-    if (e.userData.attackTimer > attackDelay) {
-        e.userData.attackTimer = 0;
+            document.getElementById('boss-phase').innerText = `PHASE ${boss.userData.phase}`;
+            const fill = document.getElementById('boss-hp-fill');
+            fill.style.background =
+                boss.userData.phase === 1 ? 'linear-gradient(90deg, #ff5555, #ff2222)' :
+                boss.userData.phase === 2 ? 'linear-gradient(90deg, #ffaa00, #ff7700)' :
+                'linear-gradient(90deg, #aa00ff, #ff00aa)';
 
-        // ======================
-        // 🔴 TANK BOSS
-        // ======================
-        if (type === 'tank') {
-            const count = phase === 1 ? 6 : phase === 2 ? 10 : 16;
-            const spread = Math.PI / 3;
-
-            for (let i = 0; i < count; i++) {
-                const angle =
-                    -spread / 2 + (spread / count) * i +
-                    e.rotation.y;
-
-                fireBullet(
-                    true,
-                    e.position.clone().add(new THREE.Vector3(0, 1.6, 0)),
-                    new THREE.Vector3(Math.sin(angle), 0, Math.cos(angle))
-                );
-            }
-        }
-
-        // ======================
-        // ⚡ RUSH BOSS
-        // ======================
-        if (type === 'rush') {
-            const dir = new THREE.Vector3()
-                .subVectors(player.position, e.position)
-                .normalize();
-
-            const rushMove = dir.multiplyScalar(phase * 3);
-const oldPos = e.position.clone();
-e.position.add(rushMove);
-
-if (checkCollision(e.position, e.userData.boxSize).hit) {
-    e.position.copy(oldPos);
-}
-
-        }
-
-        // ======================
-        // 🧠 SUMMONER BOSS
-        // ======================
-        if (type === 'summoner') {
-            const spawnCount = phase;
-
-            for (let i = 0; i < spawnCount; i++) {
-                const minion = createDetailedHumanoid(0xff7777, false);
-                minion.position.copy(e.position).add(
-                    new THREE.Vector3(
-                        (Math.random() - 0.5) * 6,
-                        0,
-                        (Math.random() - 0.5) * 6
-                    )
-                );
-                scene.add(minion);
-                state.enemies.push(minion);
-            }
-        }
-
-        // 🎥 페이즈 3 연출
-        if (phase === 3) {
-            camera.position.add(
-                new THREE.Vector3(
-                    (Math.random() - 0.5) * 0.4,
-                    (Math.random() - 0.5) * 0.4,
-                    0
-                )
-            );
+            const msg = document.getElementById('boss-msg');
+            msg.innerText = `⚠ PHASE ${boss.userData.phase} ⚠`;
+            msg.style.display = 'block';
+            setTimeout(() => msg.style.display = 'none', 1500);
         }
     }
-                                     
-                               
-                               
-                else {
-                    if(dist < 1.2) { state.hp -= 0.5; document.getElementById('damage-overlay').style.opacity = 0.3; }
-                }
-                const anim = time * (e===boss?4:10);
-                e.userData.lArm.root.rotation.x = -Math.sin(anim); e.userData.rArm.root.rotation.x = Math.sin(anim);
-                e.userData.lLeg.root.rotation.x = Math.sin(anim); e.userData.rLeg.root.rotation.x = -Math.sin(anim);
-            });
 
-            if(state.hp <= 0) { state.isGameOver = true; document.getElementById('game-over').style.display = 'flex'; document.getElementById('final-score').innerText = state.score; document.exitPointerLock(); }
+    // --- 적 스폰 ---
+    if (state.score >= state.nextBossScore && !state.bossSpawned) {
+        spawnBoss(); 
+        state.nextBossScore += 5000;
+    }
 
-            for(let i=state.debris.length-1; i>=0; i--) { const d=state.debris[i]; d.mesh.position.add(d.vel); d.vel.y-=0.02; d.life--; if(d.life<=0){scene.remove(d.mesh); state.debris.splice(i,1);} }
-            document.getElementById('hp-bar').innerText = `HP: ${Math.floor(state.hp)}`; document.getElementById('score-bar').innerText = `SCORE: ${state.score}`;
-            
-            if(input.w||input.s||input.a||input.d || (isMobile&&(input.joyX||input.joyY))) {
-                const at = time * 15;
-                player.userData.lArm.root.rotation.x = -Math.sin(at); player.userData.rArm.root.rotation.x = Math.sin(at);
-                player.userData.lLeg.root.rotation.x = Math.sin(at); player.userData.rLeg.root.rotation.x = -Math.sin(at);
-            }
-            renderer.render(scene, camera);
+    if (!boss && state.enemies.length < 15 && Math.random() < 0.1) { // 소환 확률 증가
+        const e = createDetailedHumanoid(0xff4444, false);
+        const a = Math.random() * Math.PI * 2;
+        const r = 30 + Math.random() * 20;
+        e.position.set(player.position.x + Math.cos(a) * r, 20, player.position.z + Math.sin(a) * r);
+        e.userData.velocity.y = 0;
+        updateGround(e);
+
+        if (state.gunnerCount < 3) {
+            e.userData.isGunner = true;
+            e.userData.shootCooldown = Math.random() * 1.5;
+            state.gunnerCount++;
+
+            e.traverse(obj => { if (obj.isMesh && obj.material) obj.material.color.set(0xffaa00); });
         }
+
+        scene.add(e);
+        state.enemies.push(e);
+    }
+
+    const allEnemies = [...state.enemies]; 
+    if (boss) allEnemies.push(boss);
+
+    allEnemies.forEach(e => {
+        updateEnemyGround(e);
+
+        // Gunner 공격
+        if (e !== boss && e.userData.isGunner) {
+            e.userData.shootCooldown -= dt;
+            if (e.userData.shootCooldown <= 0) {
+                const dir = new THREE.Vector3().subVectors(player.position, e.position).normalize();
+                fireBullet(true, e.position.clone().add(new THREE.Vector3(0, 1.6, 0)), dir);
+                e.userData.shootCooldown = 2.2;
+            }
+        }
+
+        const dist = e.position.distanceTo(player.position);
+        e.lookAt(player.position.x, e.position.y, player.position.z);
+
+        if (dist > (e === boss ? 8 : 1.2)) {
+            const speed = e === boss ? 0.06 : 0.1;
+            const moveDir = new THREE.Vector3(0,0,1).applyQuaternion(e.quaternion);
+            const oldX = e.position.x; e.position.x += moveDir.x * speed; if (checkCollision(e.position, e.userData.boxSize).hit) e.position.x = oldX;
+            const oldZ = e.position.z; e.position.z += moveDir.z * speed; if (checkCollision(e.position, e.userData.boxSize).hit) e.position.z = oldZ;
+        }
+
+        // 보스 근접 공격
+        if (e === boss) {
+            e.userData.attackTimer += dt;
+            if (dist < e.userData.meleeRange && e.userData.meleeCooldown <= 0) {
+                state.hp -= e.userData.meleeDamage * e.userData.phase;
+                const knockDir = new THREE.Vector3().subVectors(player.position, e.position).normalize().multiplyScalar(0.8);
+                player.position.add(knockDir);
+
+                const overlay = document.getElementById('damage-overlay');
+                overlay.style.opacity = 0.7;
+                setTimeout(() => overlay.style.opacity = 0, 200);
+
+                e.userData.meleeCooldown = 1.2;
+                e.userData.rArm.root.rotation.x = -1.5;
+                setTimeout(() => { e.userData.rArm.root.rotation.x = 0; }, 200);
+            } else {
+                e.userData.meleeCooldown -= dt;
+            }
+        }
+
+        const anim = time * (e === boss ? 4 : 10);
+        e.userData.lArm.root.rotation.x = -Math.sin(anim); e.userData.rArm.root.rotation.x = Math.sin(anim);
+        e.userData.lLeg.root.rotation.x = Math.sin(anim); e.userData.rLeg.root.rotation.x = -Math.sin(anim);
+    });
+
+    if (state.hp <= 0) {
+        state.isGameOver = true;
+        document.getElementById('game-over').style.display = 'flex';
+        document.getElementById('final-score').innerText = state.score;
+        document.exitPointerLock();
+    }
+
+    // --- 파편 업데이트 ---
+    for (let i = state.debris.length - 1; i >= 0; i--) {
+        const d = state.debris[i];
+        d.mesh.position.add(d.vel);
+        d.vel.y -= 0.02;
+        d.life--;
+        if (d.life <= 0) {
+            scene.remove(d.mesh);
+            state.debris.splice(i, 1);
+        }
+    }
+
+    // --- HUD ---
+    document.getElementById('hp-bar').innerText = `HP: ${Math.floor(state.hp)}`;
+    document.getElementById('score-bar').innerText = `SCORE: ${state.score}`;
+
+    // --- 플레이어 모션 ---
+    if (input.w || input.s || input.a || input.d || (isMobile && (input.joyX || input.joyY))) {
+        const at = time * 15;
+        player.userData.lArm.root.rotation.x = -Math.sin(at);
+        player.userData.rArm.root.rotation.x = Math.sin(at);
+        player.userData.lLeg.root.rotation.x = Math.sin(at);
+        player.userData.rLeg.root.rotation.x = -Math.sin(at);
+    }
+
+    renderer.render(scene, camera);
+}
+
         animate();
         window.addEventListener('resize', () => { camera.aspect=window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
     </script>
