@@ -266,87 +266,116 @@ function box(w, h, d, x, y, z) {
 }
 
 
-function createFullMap() {
+// ==========================================
+// ⛩️ 오버워치 부산 맵 생성 함수 (통합형)
+// ==========================================
+function createBusanMap() {
+    console.log("⛩️ Loading Busan Map...");
 
-    /* =========================
-       1️⃣ 전체 바닥
-    ========================= */
-    const mainFloor = box(900, 2, 400, 0, -1, 0);
-    mainFloor.material.color.set(0x0f141c);
-    mainFloor.userData.isFloor = true;
+    // 1. 부산 테마 재질 (Materials)
+    const matFloor = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.8 }); // 어두운 바닥
+    const matWoodRed = new THREE.MeshStandardMaterial({ color: 0x8B0000, roughness: 0.6 }); // 단청 기둥 (진한 빨강)
+    const matRoofGreen = new THREE.MeshStandardMaterial({ color: 0x004d40, roughness: 0.5 }); // 청기와
+    const matWhiteWall = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.2 }); // MEKA 기지 벽
+    const matGlass = new THREE.MeshStandardMaterial({ color: 0x87CEEB, roughness: 0.1, transparent: true, opacity: 0.7 }); // 유리
+    const matNeon = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 0.8 }); // 네온 사인
 
-    /* =========================
-       2️⃣ 양쪽 대형 건물 2개
-       - 내부 이동 가능
-       - 2,3층
-       - 외부로 나가는 구멍
-    ========================= */
-    [-260, 260].forEach(x => {
-        const width = 140;
-        const depth = 90;
-        const floorH = 6;
+    // 2. 바닥 깔기 (기본)
+    const ground = new THREE.Mesh(new THREE.BoxGeometry(200, 1, 200), matFloor);
+    ground.position.set(0, -0.5, 0);
+    ground.receiveShadow = true;
+    scene.add(ground);
+    // (물리 엔진 버전에 따라 colliders.floors 혹은 obstacles에 추가 필요)
+    if (typeof colliders !== 'undefined') colliders.floors.push(ground); 
 
-        // 외형 3층
-        for (let i = 0; i < 3; i++) {
-            box(width, floorH, depth, x, floorH / 2 + floorH * i, 0);
+    // === 헬퍼 함수: 박스 생성 및 충돌 등록 ===
+    function addBlock(x, y, z, w, h, d, mat, type = 'wall') {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+        mesh.position.set(x, y + h / 2, z);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        
+        // 충돌 박스 데이터 생성 (기존 코드 호환용)
+        mesh.userData.box = new THREE.Box3();
+        mesh.geometry.computeBoundingBox();
+
+        scene.add(mesh);
+
+        // 충돌 배열에 추가 (사용하는 변수명에 맞춰 자동 처리)
+        if (typeof colliders !== 'undefined') {
+            // 수정된 물리 엔진 사용 시
+            if (type === 'wall') colliders.walls.push(mesh);
+            else colliders.floors.push(mesh);
+        } else if (typeof obstacles !== 'undefined') {
+            // 원본 코드 사용 시
+            obstacles.push(mesh);
         }
-
-        // 내부 바닥
-        for (let i = 0; i < 3; i++) {
-            const f = box(
-                width - 12,
-                1,
-                depth - 12,
-                x,
-                floorH * i + 1,
-                0
-            );
-            f.material.color.set(0x1a202c);
-            f.userData.isFloor = true;
-        }
-
-        // 2층 출구
-        box(26, 8, 2, x, floorH * 1.5, depth / 2)
-            .material.color.set(0x000000);
-
-        // 3층 출구
-        box(26, 8, 2, x, floorH * 2.5, -depth / 2)
-            .material.color.set(0x000000);
-    });
-
-    /* =========================
-       3️⃣ 중앙 광장
-    ========================= */
-    const plaza = box(320, 1, 320, 0, 0, 0);
-    plaza.material.color.set(0x1a1f2a);
-    plaza.userData.isFloor = true;
-
-    /* =========================
-       4️⃣ 중앙 분수
-    ========================= */
-    const fountainBase = box(50, 3, 50, 0, 1.5, 0);
-    fountainBase.material.color.set(0x2a2f3a);
-
-    const fountainPillar = box(12, 14, 12, 0, 10, 0);
-    fountainPillar.material.color.set(0x3a4a6a);
-
-    /* =========================
-       5️⃣ 광장 구조물 (엄폐물)
-    ========================= */
-    for (let i = 0; i < 18; i++) {
-        const x = (Math.random() - 0.5) * 220;
-        const z = (Math.random() - 0.5) * 220;
-
-        const w = 6 + Math.random() * 10;
-        const h = 3 + Math.random() * 7;
-        const d = 6 + Math.random() * 10;
-
-        box(w, h, d, x, h / 2, z);
     }
+
+    // ==========================================
+    // [구역 A] 사찰 (Sanctuary) - 붉은 기둥과 기와
+    // ==========================================
+    
+    // 입구 기둥 (Torii gate style)
+    addBlock(-20, 0, -20, 2, 12, 2, matWoodRed); // 좌 기둥
+    addBlock(-10, 0, -20, 2, 12, 2, matWoodRed); // 우 기둥
+    addBlock(-15, 10, -20, 14, 2, 3, matRoofGreen); // 지붕 프레임
+
+    // 사찰 벽면 (엄폐물)
+    addBlock(-25, 0, -10, 2, 4, 15, matWoodRed);
+    addBlock(-25, 0, -30, 2, 4, 15, matWoodRed);
+
+    // 중앙 거점: 대형 북 (The Drum) - 원통형이지만 충돌은 박스로 처리
+    const drumGeo = new THREE.CylinderGeometry(4, 4, 5, 32);
+    const drum = new THREE.Mesh(drumGeo, new THREE.MeshStandardMaterial({ color: 0xFFD700 }));
+    drum.position.set(0, 2.5, 0);
+    drum.castShadow = true;
+    scene.add(drum);
+    
+    // 북의 충돌체 (투명 박스)
+    const drumCol = new THREE.Mesh(new THREE.BoxGeometry(8, 5, 8), new THREE.MeshBasicMaterial({ visible: false }));
+    drumCol.position.set(0, 2.5, 0);
+    if (typeof obstacles !== 'undefined') obstacles.push(drumCol);
+    else if (typeof colliders !== 'undefined') colliders.walls.push(drumCol);
+
+
+    // ==========================================
+    // [구역 B] 시내 (Downtown) - 현대식 건물 & 2층
+    // ==========================================
+
+    // 오른쪽 2층 건물 (저격 포인트)
+    addBlock(25, 0, 0, 15, 8, 40, matWhiteWall); // 1층 벽체
+    addBlock(25, 8, 0, 15, 1, 40, matFloor, 'floor'); // 2층 바닥
+
+    // 2층 난간 (유리 느낌)
+    addBlock(18, 9, 0, 0.5, 3, 40, matGlass); 
+
+    // 계단 (Stairs) - 램프 대신 계단 사용 (충돌 오류 최소화)
+    // 2층으로 올라가는 계단을 촘촘하게 배치
+    for(let i = 0; i < 10; i++) {
+        // x: 18(건물앞)에서 시작, z: 20(건물끝) 위치
+        addBlock(15, i * 0.8, 20 + (i * 1.5), 6, 1, 1.5, matWhiteWall, 'floor');
+    }
+
+    // 네온 사인 간판 (엄폐물)
+    addBlock(10, 0, 10, 1, 5, 3, matNeon);
+    addBlock(10, 0, -10, 1, 5, 3, matNeon);
+
+
+    // ==========================================
+    // [구역 C] 외곽 경계 (Map Bounds)
+    // ==========================================
+    const wallH = 15;
+    addBlock(0, 0, 50, 100, wallH, 2, matWhiteWall); // 앞
+    addBlock(0, 0, -50, 100, wallH, 2, matRoofGreen); // 뒤 (사찰 배경)
+    addBlock(-50, 0, 0, 2, wallH, 100, matWoodRed); // 좌
+    addBlock(50, 0, 0, 2, wallH, 100, matWhiteWall); // 우
+
+    // 조명 추가 (부산의 밤 느낌)
+    const pointLight = new THREE.PointLight(0x00ffff, 1, 50);
+    pointLight.position.set(10, 10, 10);
+    scene.add(pointLight);
 }
-
-        createFullMap();
-
 
 
 
