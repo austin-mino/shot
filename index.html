@@ -244,7 +244,8 @@ scene.add(fillLight);
         }
 
         const player = createDetailedHumanoid(0x0088ff, true);
-        player.position.set(0, 1.6, 0); // 바닥 위 정확한 높이
+        player.position.set(0, 2.2, 0); // 🔥 footHeight보다 높게
+player.userData.velocity.y = 0; // 🔒 초기 낙하 차단
 
         scene.add(player);
 
@@ -331,7 +332,8 @@ m.add(edge);
         // 게임 시작
         startScreen.addEventListener('click', () => { 
             state.isGameActive = true; 
-                updateGround(player); // ⭐ 바닥 강제 정렬
+    player.userData.velocity.y = 0;   // 🔒 중력 리셋
+    updateGround(player);             // ⭐ 바닥에 딱 붙임
 
             document.body.requestPointerLock(); 
             startScreen.style.display = 'none';
@@ -635,6 +637,10 @@ boss.userData.meleeDamage = 12;
         function animate() {
 requestAnimationFrame(animate);
                 if (!state.isGameActive) return; // 🔒 여기!!! 터치 전엔 게임 정지
+            if (state.isGameActive && !player.userData.isGrounded) {
+    updateGround(player);
+}
+
 
 
             // 연사 처리
