@@ -244,7 +244,7 @@ scene.add(fillLight);
         }
 
         const player = createDetailedHumanoid(0x0088ff, true);
-        player.position.set(10, 18, 0); // 🔥 footHeight보다 높게
+        player.position.set(0, 18, 0); // 🔥 footHeight보다 높게
 player.userData.velocity.y = 0; // 🔒 초기 낙하 차단
 
         scene.add(player);
@@ -270,7 +270,7 @@ const chunkSize = 50; // 블록 하나 크기
 const viewDistance = 3; // 플레이어 주변 몇 개 블록까지 로딩
 const loadedChunks = new Map(); // "x_z" -> THREE.Group
 
-const mapHeightOffset = 15; // 맵 전체 높이
+const mapHeightOffset = 18; // 맵 전체 높이
 
 function getChunkKey(cx, cz) {
     return `${cx}_${cz}`;
