@@ -317,7 +317,7 @@ const z = cz * chunkSize + j * floorSize * 1.2;
 
             // 경사로
             const ramp = new THREE.Mesh(new THREE.PlaneGeometry(6, 4), new THREE.MeshStandardMaterial({ color: 0x888888, roughness:0.3 }));
-            ramp.rotation.x = -Math.atan(h ,  6);
+            ramp.rotation.x = -Math.atan2(h, 6);
             ramp.position.set(x + floorSize/2 + 3, h/2, z);
             ramp.userData.isFloor = true;
             chunkGroup.add(ramp);
@@ -355,13 +355,13 @@ function updateChunks(playerX, playerZ) {
             scene.remove(group);
             loadedChunks.delete(key);
 
-             // ✅ colliders에서도 제거
+            // ✅ colliders에서도 제거
         group.children.forEach(obj => {
             colliders.floors = colliders.floors.filter(f => f !== obj);
             colliders.walls = colliders.walls.filter(w => w !== obj);
         });
-}
-    });
+    }
+});
 
 
 
