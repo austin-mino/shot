@@ -538,28 +538,35 @@ function updateGround(player) {
 
 
         // --- 5. 물리 (벽 통과 방지) ---
-        function checkCollision(pos, boxSize) {
-            const min = new THREE.Vector3(
-    pos.x - boxSize.x/2,
-    pos.y + 0.2,          // 🔑 바닥은 무시
-    pos.z - boxSize.z/2
-);
-const max = new THREE.Vector3(
-    pos.x + boxSize.x/2,
-    pos.y + boxSize.y*0.5, // 🔑 허리까지만 검사
-    pos.z + boxSize.z/2
-);
+     function checkCollision(pos, boxSize) {
+    const min = new THREE.Vector3(
+        pos.x - boxSize.x/2,
+        pos.y + 0.2,
+        pos.z - boxSize.z/2
+    );
+    const max = new THREE.Vector3(
+        pos.x + boxSize.x/2,
+        pos.y + boxSize.y*0.5,
+        pos.z + boxSize.z/2
+    );
 
-            const box = new THREE.Box3(min, max);
-           for (const wall of colliders.walls) {
-    wall.userData.box.copy(wall.geometry.boundingBox).applyMatrix4(wall.matrixWorld);
-    if (box.intersectsBox(wall.userData.box)) {
-        return { hit: true, box: wall.userData.box };
+    const box = new THREE.Box3(min, max);
+
+    for (const wall of colliders.walls) {
+        if (!wall.userData.box) wall.userData.box = new THREE.Box3();
+        if (wall.geometry && !wall.geometry.boundingBox) wall.geometry.computeBoundingBox();
+
+        // ✅ 안전하게 copy
+        wall.userData.box.copy(wall.geometry.boundingBox).applyMatrix4(wall.matrixWorld);
+
+        if (box.intersectsBox(wall.userData.box)) {
+            return { hit: true, box: wall.userData.box };
+        }
     }
+
+    return { hit: false };
 }
 
-            return { hit: false };
-        }
 
         // --- 6. 게임 로직 ---
         let boss = null;
