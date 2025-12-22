@@ -267,12 +267,12 @@ function box(w, h, d, x, y, z) {
 
 
 
-
-        function createCityMapWithPalette() {
-    // 전체 바닥
+function createOptimizedCityMap() {
+    // 전체 바닥 (PlaneGeometry 사용)
     const matFloor = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.8 });
-    const ground = new THREE.Mesh(new THREE.BoxGeometry(200, 1, 200), matFloor);
-    ground.position.y = -0.5;
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), matFloor);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = 0;
     ground.userData.isFloor = true;
     scene.add(ground);
     colliders.floors.push(ground);
@@ -291,10 +291,9 @@ function box(w, h, d, x, y, z) {
 
             const x = -75 + i * spacing + Math.random() * 5;
             const z = -75 + j * spacing + Math.random() * 5;
-
             const rotY = Math.PI / 2 * Math.floor(Math.random() * 4);
 
-            // 건물 재질: 팔레트에서 랜덤 선택
+            // 건물
             const matWall = new THREE.MeshStandardMaterial({ 
                 color: palette[Math.floor(Math.random() * palette.length)], 
                 roughness: 0.3 
@@ -305,22 +304,39 @@ function box(w, h, d, x, y, z) {
             scene.add(house);
             colliders.walls.push(house);
 
-            // 경사로 (회색)
+            // 1층 바닥 (입구)
+            const floor1 = new THREE.Mesh(new THREE.PlaneGeometry(w, d), matFloor);
+            floor1.rotation.x = -Math.PI / 2;
+            floor1.position.set(x, 0.01, z); // 바닥보다 약간 위로
+            floor1.userData.isFloor = true;
+            scene.add(floor1);
+            colliders.floors.push(floor1);
+
+            // 2층 옥상 바닥
+            const floor2 = new THREE.Mesh(new THREE.PlaneGeometry(w, d), matFloor);
+            floor2.rotation.x = -Math.PI / 2;
+            floor2.position.set(x, h, z);
+            floor2.userData.isFloor = true;
+            scene.add(floor2);
+            colliders.floors.push(floor2);
+
+            // 경사로
             const rampLength = 6;
             const rampWidth = 4;
             const rampHeight = h;
             const matRamp = new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.3 });
-            const ramp = new THREE.Mesh(new THREE.BoxGeometry(rampWidth, 1, rampLength), matRamp);
+            const ramp = new THREE.Mesh(new THREE.PlaneGeometry(rampLength, rampWidth), matRamp);
+            ramp.rotation.x = -Math.atan(rampHeight / rampLength);
+            ramp.userData.isFloor = true;
 
             const dir = Math.floor(Math.random() * 4);
             switch (dir) {
-                case 0: ramp.position.set(x + w/2 + rampWidth/2, rampHeight/2, z); ramp.rotation.y = 0; break;
-                case 1: ramp.position.set(x - w/2 - rampWidth/2, rampHeight/2, z); ramp.rotation.y = 0; break;
-                case 2: ramp.position.set(x, rampHeight/2, z + d/2 + rampWidth/2); ramp.rotation.y = Math.PI/2; break;
-                case 3: ramp.position.set(x, rampHeight/2, z - d/2 - rampWidth/2); ramp.rotation.y = Math.PI/2; break;
+                case 0: ramp.position.set(x + w/2 + rampLength/2, rampHeight/2, z); ramp.rotation.y = 0; break;
+                case 1: ramp.position.set(x - w/2 - rampLength/2, rampHeight/2, z); ramp.rotation.y = 0; break;
+                case 2: ramp.position.set(x, rampHeight/2, z + d/2 + rampLength/2); ramp.rotation.y = Math.PI/2; break;
+                case 3: ramp.position.set(x, rampHeight/2, z - d/2 - rampLength/2); ramp.rotation.y = Math.PI/2; break;
             }
-            ramp.rotation.x = -Math.atan(rampHeight / rampLength);
-            ramp.userData.isFloor = true;
+
             scene.add(ramp);
             colliders.floors.push(ramp);
         }
@@ -332,7 +348,7 @@ function box(w, h, d, x, y, z) {
     scene.add(light);
 }
 
-createCityMapWithPalette();
+createOptimizedCityMap();
 
 
 
@@ -673,10 +689,6 @@ requestAnimationFrame(animate);
             if (state.isGameActive && !player.userData.isGrounded) {
     updateGround(player);
 }
-
-             requestAnimationFrame(animate);
-    renderer.render(scene, camera);
-
 
             // 연사 처리
 if (isFiring && fireCooldown <= 0) {
