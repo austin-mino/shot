@@ -244,85 +244,61 @@ scene.add(fillLight);
         }
 
         const player = createDetailedHumanoid(0x0088ff, true);
-        player.position.set(0, 2.2, 0); // 🔥 footHeight보다 높게
+        player.position.set(0, 3, 0); // 🔥 footHeight보다 높게
 player.userData.velocity.y = 0; // 🔒 초기 낙하 차단
 
         scene.add(player);
 
-function createUrbanMap(scene, colliders) {
+function generateDenseStructures() {
+    const size = 700;
+    const step = 20;
 
-  const floorMat = new THREE.MeshStandardMaterial({
-     color: 0x1e2f3f,
-    roughness: 0.75,
-    metalness: 0.15
-});
+    for (let x = -size; x <= size; x += step) {
+        for (let z = -size; z <= size; z += step) {
 
-const wallMat = new THREE.MeshStandardMaterial({
-    color: 0xbfc7d5,     // 밝은 콘크리트
-    roughness: 0.5,
-    metalness: 0.15
-});
+            if (Math.random() < 0.45) continue; // 골목 생성
 
+            const w = 6 + Math.random() * 10;
+            const d = 6 + Math.random() * 10;
+            const h = 2 + Math.random() * 12;
 
+            const y = h / 2;
 
-    function floor(x, y, z, w, h, d, rx = 0, rz = 0) {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), floorMat);
-        m.position.set(x, y, z);
-        m.rotation.x = rx;
-        m.rotation.z = rz;
-        m.userData.isFloor = true;
-        m.geometry.computeBoundingBox();
-        scene.add(m);
-        colliders.floors.push(m);
-        const edge = new THREE.LineSegments(
-    new THREE.EdgesGeometry(m.geometry),
-    new THREE.LineBasicMaterial({
-        color: 0x00ffff,
-        transparent: true,
-        opacity: 0.25
-    })
-);
-m.add(edge);
+            const m = box(w, h, d, x, y, z);
 
-    }
+            // 🎨 색 랜덤
+            m.material.color.setHSL(
+                0.55 + Math.random() * 0.1,
+                0.2,
+                0.2 + Math.random() * 0.25
+            );
 
-    function wall(x, y, z, w, h, d) {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
-        m.position.set(x, y, z);
-        m.geometry.computeBoundingBox();
-        m.userData.box = new THREE.Box3();
-        scene.add(m);
-        colliders.walls.push(m);
-    }
+            m.userData.isStructure = true;
 
-    /* ===== 메인 광장 ===== */
-    floor(0, -2, 0, 300, 4, 300);
-
-    /* ===== 중앙 골목 ===== */
-    floor(0, 0, 0, 20, 4, 220);
-    wall(11, 12, 0, 2, 24, 220);
-    wall(-11, 12, 0, 2, 24, 220);
-
-    /* ===== 경사로 (오르막) ===== */
-    floor(80, 5, 0, 30, 4, 120, -Math.PI / 10);
-
-    /* ===== 경사로 (내리막) ===== */
-    floor(-80, -5, 0, 30, 4, 120, Math.PI / 10);
-
-    /* ===== 하이그라운드 ===== */
-    floor(0, 18, -100, 100, 4, 40);
-    wall(50, 30, -100, 4, 24, 40);
-    wall(-50, 30, -100, 4, 24, 40);
-
-    /* ===== 맵 경계 벽 (탈출 방지) ===== */
-    const B = 150;
-    wall(0, 40,  B, 300, 80, 4);
-    wall(0, 40, -B, 300, 80, 4);
-    wall( B, 40, 0, 4, 80, 300);
-    wall(-B, 40, 0, 4, 80, 300);
+            if (Math.random() < 0.35) {
+    const top = box(
+        w * 0.6,
+        1,
+        d * 0.6,
+        x,
+        h + 0.5,
+        z
+    );
+    top.material.color.offsetHSL(0, 0, 0.05);
 }
 
-        createUrbanMap(scene, colliders);
+if (Math.random() < 0.4) {
+    for (let i = -1; i <= 1; i += 2) {
+        box(1, h, 1, x + i * (w / 2), h / 2, z + i * (d / 2));
+    }
+}
+
+        }
+    }
+}
+
+
+        generateDenseStructures();
 
 
 
@@ -448,20 +424,31 @@ function updateGround(player) {
     player.userData.isGrounded = false;
 }
 
-        function updateEnemyGround(enemy) {
+       function updateEnemyGround(enemy) {
     const footHeight = 1.6;
+
     const origin = enemy.position.clone();
     origin.y -= footHeight - 0.05;
 
     groundRay.set(origin, down);
+
     const hits = groundRay.intersectObjects(
         colliders.floors.filter(f => f.userData.isFloor),
         false
     );
 
-    if (hits.length > 0 && hits[0].distance <= 0.2) {
-        enemy.position.y = hits[0].point.y + footHeight;
+    if (hits.length > 0) {
+        const hit = hits[0];
+
+        if (hit.distance <= 0.25 && enemy.userData.velocity.y <= 0) {
+            enemy.position.y = hit.point.y + footHeight;
+            enemy.userData.velocity.y = 0;
+            enemy.userData.isGrounded = true;
+            return;
+        }
     }
+
+    enemy.userData.isGrounded = false;
 }
 
 
@@ -608,6 +595,8 @@ boss.userData.meleeDamage = 12;
 
     // 씬 추가
     scene.add(boss);
+boss.userData.velocity.y = 0;
+updateGround(boss);
 
     // ===== UI =====
     document.getElementById('boss-ui').style.display = 'block';
@@ -805,9 +794,24 @@ if (boss) {
 
             // 4. 적 스폰 & AI
             if(state.score >= state.nextBossScore && !state.bossSpawned) { spawnBoss(); state.nextBossScore += 5000; }
-            if(!boss && state.enemies.length < 15 && Math.random() < 0.03) {
-                const e = createDetailedHumanoid(0xff4444, false); const a = Math.random()*6.28; const r = 30+Math.random()*20;
-                e.position.set(player.position.x+Math.cos(a)*r, 10, player.position.z+Math.sin(a)*r); // 🔫 GUNNER 설정 (최대 3명)
+           if(!boss && state.enemies.length < 15 && Math.random() < 0.03) {
+    const e = createDetailedHumanoid(0xff4444, false);
+    const a = Math.random()*6.28;
+    const r = 30+Math.random()*20;
+
+    // x,z만 지정 (y는 위에서 시작)
+    e.position.set(
+        player.position.x + Math.cos(a) * r,
+        20,
+        player.position.z + Math.sin(a) * r
+    );
+
+    // 🔒 플레이어와 동일 처리
+    e.userData.velocity.y = 0;
+    updateGround(e);
+
+                
+                // 🔫 GUNNER 설정 (최대 3명)
     if (state.gunnerCount < 3) {
         e.userData.isGunner = true;
         e.userData.shootCooldown = Math.random() * 1.5;
