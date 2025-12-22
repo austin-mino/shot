@@ -346,7 +346,7 @@ for (let i = 0; i < 5; i++) {
 const groundMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(150, 150), groundMat);
 ground.rotation.x = -Math.PI / 2;
-ground.position.set(60, 5, 60); // y값 높임
+ground.position.set(60, 18, 60); // y값 높임
 ground.userData.isFloor = true;
 colliders.floors.push(ground);
 scene.add(ground);
