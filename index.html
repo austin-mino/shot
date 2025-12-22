@@ -266,10 +266,11 @@ function box(w, h, d, x, y, z) {
 }
 
 
-
 const chunkSize = 50; // 블록 하나 크기
 const viewDistance = 3; // 플레이어 주변 몇 개 블록까지 로딩
 const loadedChunks = new Map(); // "x_z" -> THREE.Group
+
+const mapHeightOffset = 10; // 맵 전체 높이
 
 function getChunkKey(cx, cz) {
     return `${cx}_${cz}`;
@@ -284,41 +285,43 @@ function generateChunk(cx, cz) {
     const matWallPalette = [0xdedede, 0xc0b283, 0xa8997a, 0x8ca3b0, 0xb8b0a5];
     const floorSize = 10; // 기본 건물 면적
 
-    // 각 청크에 3x3 건물 배치
     for (let i = 0; i < 3; i++) {
         for (let j = 0; j < 3; j++) {
-           const x = cx * chunkSize + i * floorSize * 1.2;
-const z = cz * chunkSize + j * floorSize * 1.2;
+            const x = cx * chunkSize + i * floorSize * 1.2;
+            const z = cz * chunkSize + j * floorSize * 1.2;
 
             const h = 5 + Math.random() * 10;
 
             // 건물
-            const wallMat = new THREE.MeshStandardMaterial({ color: matWallPalette[Math.floor(Math.random() * matWallPalette.length)], roughness: 0.3 });
+            const wallMat = new THREE.MeshStandardMaterial({
+                color: matWallPalette[Math.floor(Math.random() * matWallPalette.length)],
+                roughness: 0.3
+            });
             const building = new THREE.Mesh(new THREE.BoxGeometry(floorSize, h, floorSize), wallMat);
-            building.position.set(x, h/2, z);
+            building.position.set(x, h / 2 + mapHeightOffset, z); // 높이 적용
             chunkGroup.add(building);
             colliders.walls.push(building);
 
             // 1층 바닥
             const floor1 = new THREE.Mesh(new THREE.PlaneGeometry(floorSize, floorSize), matFloor);
-            floor1.rotation.x = -Math.PI/2;
-            floor1.position.set(x, 0.01, z);
+            floor1.rotation.x = -Math.PI / 2;
+            floor1.position.set(x, 0.01 + mapHeightOffset, z);
             floor1.userData.isFloor = true;
             chunkGroup.add(floor1);
             colliders.floors.push(floor1);
 
             // 2층 옥상
             const floor2 = new THREE.Mesh(new THREE.PlaneGeometry(floorSize, floorSize), matFloor);
-            floor2.rotation.x = -Math.PI/2;
-            floor2.position.set(x, h, z);
+            floor2.rotation.x = -Math.PI / 2;
+            floor2.position.set(x, h + mapHeightOffset, z);
             floor2.userData.isFloor = true;
             chunkGroup.add(floor2);
             colliders.floors.push(floor2);
 
             // 경사로
-            const ramp = new THREE.Mesh(new THREE.PlaneGeometry(6, 4), new THREE.MeshStandardMaterial({ color: 0x888888, roughness:0.3 }));
+            const ramp = new THREE.Mesh(new THREE.PlaneGeometry(6, 4), new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.3 }));
             ramp.rotation.x = -Math.atan2(h, 6);
-            ramp.position.set(x + floorSize/2 + 3, h/2, z);
+            ramp.position.set(x + floorSize / 2 + 3, h / 2 + mapHeightOffset, z);
             ramp.userData.isFloor = true;
             chunkGroup.add(ramp);
             colliders.floors.push(ramp);
@@ -327,8 +330,8 @@ const z = cz * chunkSize + j * floorSize * 1.2;
 
     // 바닥
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(chunkSize, chunkSize), matFloor);
-    ground.rotation.x = -Math.PI/2;
-    ground.position.set(cx * chunkSize, 0, cz * chunkSize);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.set(cx * chunkSize, 0 + mapHeightOffset, cz * chunkSize);
     ground.userData.isFloor = true;
     chunkGroup.add(ground);
     colliders.floors.push(ground);
@@ -341,28 +344,26 @@ function updateChunks(playerX, playerZ) {
     const currentChunkX = Math.floor(playerX / chunkSize);
     const currentChunkZ = Math.floor(playerZ / chunkSize);
 
-    // 필요한 청크만 생성
     for (let dx = -viewDistance; dx <= viewDistance; dx++) {
         for (let dz = -viewDistance; dz <= viewDistance; dz++) {
             generateChunk(currentChunkX + dx, currentChunkZ + dz);
         }
     }
 
-    // 필요 없는 청크 제거
     loadedChunks.forEach((group, key) => {
         const [cx, cz] = key.split("_").map(Number);
         if (Math.abs(cx - currentChunkX) > viewDistance || Math.abs(cz - currentChunkZ) > viewDistance) {
             scene.remove(group);
             loadedChunks.delete(key);
 
-            // ✅ colliders에서도 제거
-        group.children.forEach(obj => {
-            colliders.floors = colliders.floors.filter(f => f !== obj);
-            colliders.walls = colliders.walls.filter(w => w !== obj);
-        });
-    }
-});
+            group.children.forEach(obj => {
+                colliders.floors = colliders.floors.filter(f => f !== obj);
+                colliders.walls = colliders.walls.filter(w => w !== obj);
+            });
+        }
+    });
 }
+
 
 
 
