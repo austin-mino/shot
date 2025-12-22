@@ -361,7 +361,7 @@ scene.add(ground);
             state.isGameActive = true; 
     player.userData.velocity.y = 0;   // 🔒 중력 리셋
     updateGround(player);             // ⭐ 바닥에 딱 붙임
-updateChunks(player.position.x, player.position.z); // ✅ 추가
+
 
             document.body.requestPointerLock(); 
             startScreen.style.display = 'none';
@@ -692,7 +692,7 @@ updateGround(boss);
     const time = clock.getElapsedTime();
 
     // 2. 환경/플레이어
-    updateChunks(player.position.x, player.position.z);
+   
     if (!player.userData.isGrounded) updateGround(player);
 
     // 3. 플레이어 총알 연사
