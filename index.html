@@ -269,46 +269,46 @@ const colliders = { floors: [], walls: [] };
 scene.background = new THREE.Color(0x1b2a4a);
 scene.fog = new THREE.FogExp2(0x1b2a4a, 0.004);
 
-function createHouse(x, z, width = 10, depth = 10, height = 8) {
+function createHouse(x, z, width = 10, depth = 10, height = 8, baseY = 5) {
     const matFloor = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.8 });
     const matWall = new THREE.MeshStandardMaterial({ color: 0xc0b283, roughness: 0.3 });
 
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), matFloor);
     floor.rotation.x = -Math.PI / 2;
-    floor.position.set(x, 0, z);
+    floor.position.set(x, baseY, z);
     floor.userData.isFloor = true;
     colliders.floors.push(floor);
     scene.add(floor);
 
     const building = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), matWall);
-    building.position.set(x, height / 2, z);
+    building.position.set(x, baseY + height / 2, z);
     colliders.walls.push(building);
     scene.add(building);
 
     const roof = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), matFloor);
     roof.rotation.x = -Math.PI / 2;
-    roof.position.set(x, height, z);
+    roof.position.set(x, baseY + height, z);
     roof.userData.isFloor = true;
     colliders.floors.push(roof);
     scene.add(roof);
 }
 
-function createPlaza(x, z, width = 20, depth = 20) {
+function createPlaza(x, z, width = 20, depth = 20, baseY = 5) {
     const matPlaza = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.8 });
     const plaza = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), matPlaza);
     plaza.rotation.x = -Math.PI / 2;
-    plaza.position.set(x, 0, z);
+    plaza.position.set(x, baseY, z);
     plaza.userData.isFloor = true;
     colliders.floors.push(plaza);
     scene.add(plaza);
 }
 
-function createRoad(x, z, width, length, rotation = 0) {
+function createRoad(x, z, width, length, rotation = 0, baseY = 5) {
     const matRoad = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.9 });
     const road = new THREE.Mesh(new THREE.PlaneGeometry(width, length), matRoad);
     road.rotation.x = -Math.PI / 2;
     road.rotation.z = rotation;
-    road.position.set(x, 0.01, z);
+    road.position.set(x, baseY + 0.01, z);
     road.userData.isFloor = true;
     colliders.floors.push(road);
     scene.add(road);
@@ -317,36 +317,40 @@ function createRoad(x, z, width, length, rotation = 0) {
 // 울퉁불퉁한 도시 만들기
 for (let i = 0; i < 5; i++) {
     for (let j = 0; j < 5; j++) {
-        const x = i * 15 + (Math.random() - 0.5) * 5; // 랜덤 오프셋
-        const z = j * 15 + (Math.random() - 0.5) * 5;
+        const spacing = 25; // 간격을 기존보다 넓게
+        const offset = 5;   // 랜덤 오프셋
+        const x = i * spacing + (Math.random() - 0.5) * offset;
+        const z = j * spacing + (Math.random() - 0.5) * offset;
+        const baseY = 5 + Math.random() * 3; // 바닥 높이 조금씩 변화
 
         // 광장 위치
         if ((i === 2 && j === 2) || (i === 0 && j === 4)) {
-            createPlaza(x, z, 20, 20);
+            createPlaza(x, z, 20, 20, baseY);
         } else {
             const height = 5 + Math.random() * 5;
             const width = 8 + Math.random() * 4;
             const depth = 8 + Math.random() * 4;
-            createHouse(x, z, width, depth, height);
+            createHouse(x, z, width, depth, height, baseY);
         }
 
         // 랜덤 길 연결
         if (Math.random() < 0.5) {
-            createRoad(x, z + 7, 4 + Math.random() * 2, 15 + Math.random() * 10);
+            createRoad(x, z + 12, 4 + Math.random() * 2, 20 + Math.random() * 10, 0, baseY);
         } else {
-            createRoad(x + 7, z, 4 + Math.random() * 2, 15 + Math.random() * 10, Math.PI / 2);
+            createRoad(x + 12, z, 4 + Math.random() * 2, 20 + Math.random() * 10, Math.PI / 2, baseY);
         }
     }
 }
 
 // 전체 맵 바닥
 const groundMat = new THREE.MeshStandardMaterial({ color: 0x222222 });
-const ground = new THREE.Mesh(new THREE.PlaneGeometry(100, 100), groundMat);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(150, 150), groundMat);
 ground.rotation.x = -Math.PI / 2;
-ground.position.set(30, 0, 30);
+ground.position.set(60, 5, 60); // y값 높임
 ground.userData.isFloor = true;
 colliders.floors.push(ground);
 scene.add(ground);
+
 
 
 
