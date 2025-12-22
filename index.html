@@ -143,6 +143,7 @@ cameraMode: 'TPS',
 
         // --- 2. 씬 & 렌더러 ---
         const scene = new THREE.Scene();
+        const colliders = { floors: [], walls: [] };
         scene.background = new THREE.Color(0x050505);
         scene.fog = new THREE.FogExp2(0x050505, 0.015);
 
@@ -159,9 +160,7 @@ cameraMode: 'TPS',
         dirLight.shadow.mapSize.set(2048, 2048);
         scene.add(dirLight);
 
-        const plane = new THREE.Mesh(new THREE.PlaneGeometry(500, 500), new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 }));
-        plane.rotation.x = -Math.PI / 2; plane.receiveShadow = true; scene.add(plane);
-        scene.add(new THREE.GridHelper(500, 100, 0x444444, 0x111111));
+       
 
         // --- 3. 캐릭터 생성 ---
         function createDetailedHumanoid(color, isPlayer, scale = 1) {
@@ -234,16 +233,88 @@ cameraMode: 'TPS',
         const player = createDetailedHumanoid(0x0088ff, true);
         scene.add(player);
 
-        function createObstacles() {
-            for (let i = 0; i < 50; i++) {
-                const w = 3 + Math.random() * 5; const h = 3 + Math.random() * 6; const d = 3 + Math.random() * 5;
-                const obs = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshStandardMaterial({ color: 0x555566 }));
-                let x, z; do { x = (Math.random()-0.5)*300; z = (Math.random()-0.5)*300; } while(Math.sqrt(x*x+z*z) < 20);
-                obs.position.set(x, h/2, z); obs.castShadow = true; obs.receiveShadow = true;
-                obs.userData.box = new THREE.Box3().setFromObject(obs); scene.add(obs); state.obstacles.push(obs);
-            }
-        }
-        createObstacles();
+      function createUrbanMap(scene, colliders) {
+
+    colliders.floors = [];
+    colliders.walls = [];
+
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x2b2b2b });
+    const wallMat  = new THREE.MeshStandardMaterial({ color: 0x555555 });
+
+    /* =========================
+       바닥 유틸
+    ========================= */
+    function floor(x, y, z, w, h, d, rotX = 0, rotZ = 0) {
+        const m = new THREE.Mesh(
+            new THREE.BoxGeometry(w, h, d),
+            floorMat
+        );
+        m.position.set(x, y, z);
+        m.rotation.x = rotX;
+        m.rotation.z = rotZ;
+        m.userData.isFloor = true;   // 🔑 추가
+
+        scene.add(m);
+        colliders.floors.push(m);
+    }
+
+    /* =========================
+       벽 / 건물 유틸
+    ========================= */
+    function wall(x, y, z, w, h, d) {
+        const m = new THREE.Mesh(
+            new THREE.BoxGeometry(w, h, d),
+            wallMat
+        );
+        m.position.set(x, y, z);
+        m.geometry.computeBoundingBox();
+        m.userData.box = new THREE.Box3();
+        scene.add(m);
+        colliders.walls.push(m);
+    }
+
+    /* =========================
+       메인 광장
+    ========================= */
+    floor(0, -1, 0, 80, 1, 80);
+
+    /* =========================
+       중앙 골목
+    ========================= */
+    floor(0, 0, 0, 8, 1, 40);
+    wall(4.5, 4, 0, 1, 8, 40);
+    wall(-4.5, 4, 0, 1, 8, 40);
+
+    /* =========================
+       좌측 골목 (내리막)
+    ========================= */
+    floor(-14, -0.5, -5, 6, 1, 20, 0, Math.PI / 12);
+    wall(-18, 4, -5, 1, 8, 20);
+    wall(-10, 4, -5, 1, 8, 20);
+
+    /* =========================
+       우측 골목 (오르막)
+    ========================= */
+    floor(14, 1, 8, 6, 1, 20, 0, -Math.PI / 10);
+    wall(18, 5, 8, 1, 10, 20);
+    wall(10, 5, 8, 1, 10, 20);
+
+    /* =========================
+       램프 연결 구간
+    ========================= */
+    floor(0, 1.5, -18, 6, 1, 10, 0, Math.PI / 8);
+
+    /* =========================
+       건물 블록
+    ========================= */
+    wall(10, 6, -10, 8, 12, 8);
+    wall(-10, 6, 10, 8, 12, 8);
+    wall(18, 8, -18, 10, 16, 10);
+    wall(-18, 8, 18, 10, 16, 10);
+}
+
+        createUrbanMap(scene, colliders);
+
 
         // --- 4. 컨트롤 & 카메라 로직 개선 ---
         const startScreen = document.getElementById('start-screen');
@@ -333,6 +404,35 @@ document.getElementById('btn-fire').addEventListener('touchend', e=>{
             player.visible = (state.cameraMode === 'TPS');
         }
 
+        // ===== 바닥 감지 (경사 / 오르막 / 내리막 대응) =====
+const groundRay = new THREE.Raycaster();
+const down = new THREE.Vector3(0, -1, 0);
+
+function updateGround(player) {
+    const origin = player.position.clone();
+    origin.y += 0.5;
+
+    groundRay.set(origin, down);
+   const hits = groundRay.intersectObjects(
+    colliders.floors.filter(f => f.userData.isFloor)
+);
+
+
+    if (hits.length > 0) {
+        const hit = hits[0];
+        const footHeight = 1.6;
+
+        if (hit.distance < footHeight + 0.25 && player.userData.velocity.y <= 0) {
+            player.position.y = hit.point.y + footHeight;
+            player.userData.velocity.y = 0;
+            player.userData.isGrounded = true;
+            return;
+        }
+    }
+    player.userData.isGrounded = false;
+}
+
+
         // --- 5. 물리 (벽 통과 방지) ---
         function checkCollision(pos, boxSize) {
             const min = new THREE.Vector3(
@@ -347,7 +447,13 @@ const max = new THREE.Vector3(
 );
 
             const box = new THREE.Box3(min, max);
-            for (const obs of state.obstacles) { if (box.intersectsBox(obs.userData.box)) return { hit: true, box: obs.userData.box }; }
+           for (const wall of colliders.walls) {
+    wall.userData.box.copy(wall.geometry.boundingBox).applyMatrix4(wall.matrixWorld);
+    if (box.intersectsBox(wall.userData.box)) {
+        return { hit: true, box: wall.userData.box };
+    }
+}
+
             return { hit: false };
         }
 
@@ -565,15 +671,23 @@ if (fireCooldown > 0) fireCooldown--;
             if(input.space && player.userData.isGrounded) { player.userData.velocity.y = physics.jump; player.userData.isGrounded = false; }
             player.userData.velocity.y += physics.gravity; player.position.y += player.userData.velocity.y;
 
-            const colY = checkCollision(player.position, player.userData.boxSize);
-            if(colY.hit && player.userData.velocity.y < 0 && player.position.y > colY.box.min.y) { player.position.y = colY.box.max.y; player.userData.velocity.y = 0; player.userData.isGrounded = true; }
-            else if(player.position.y < 0) { player.position.y = 0; player.userData.velocity.y = 0; player.userData.isGrounded = true; }
+           
+updateGround(player);
 
             // 3. 총알 업데이트
             for (let i = state.bullets.length - 1; i >= 0; i--) {
                 const b = state.bullets[i]; b.mesh.position.add(b.velocity); b.life--;
                 let hit = false;
-                if(!hit) { for(let obs of state.obstacles) if(obs.userData.box.containsPoint(b.mesh.position)) { hit=true; break; } }
+                if(!hit) { for (const wall of colliders.walls) {
+    wall.userData.box.copy(wall.geometry.boundingBox)
+        .applyMatrix4(wall.matrixWorld);
+
+    if (wall.userData.box.containsPoint(b.mesh.position)) {
+        hit = true;
+        break;
+    }
+}
+ }
                 if (!hit) {
                     if (b.isEnemy) { 
                         if(b.mesh.position.distanceTo(player.position.clone().add(new THREE.Vector3(0,1,0))) < 1.0) { state.hp -= 10; hit=true; document.getElementById('damage-overlay').style.opacity = 0.6; setTimeout(()=>document.getElementById('damage-overlay').style.opacity=0, 200); }
@@ -696,7 +810,7 @@ if (e !== boss && e.userData.isGunner) {
                 if(e.position.y > 0) {
                     e.position.y -= 0.15; const ground = checkCollision(e.position, e.userData.boxSize);
                     if(ground.hit && e.position.y > ground.box.min.y) { if(e.position.y < ground.box.max.y + 1.0) e.position.y = ground.box.max.y; }
-                } else e.position.y = 0;
+                }
 if (e === boss) {
     e.userData.attackTimer += dt;
 // ============================
