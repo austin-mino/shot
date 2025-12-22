@@ -359,8 +359,7 @@ function updateChunks(playerX, playerZ) {
         group.children.forEach(obj => {
             colliders.floors = colliders.floors.filter(f => f !== obj);
             colliders.walls = colliders.walls.filter(w => w !== obj);
-        }
-    });
+        });
 }
 
 
