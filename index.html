@@ -287,8 +287,9 @@ function generateChunk(cx, cz) {
     // 각 청크에 3x3 건물 배치
     for (let i = 0; i < 3; i++) {
         for (let j = 0; j < 3; j++) {
-            const x = cx * chunkSize - chunkSize/2 + i * floorSize * 1.2;
-            const z = cz * chunkSize - chunkSize/2 + j * floorSize * 1.2;
+           const x = cx * chunkSize + i * floorSize * 1.2;
+const z = cz * chunkSize + j * floorSize * 1.2;
+
             const h = 5 + Math.random() * 10;
 
             // 건물
@@ -316,7 +317,7 @@ function generateChunk(cx, cz) {
 
             // 경사로
             const ramp = new THREE.Mesh(new THREE.PlaneGeometry(6, 4), new THREE.MeshStandardMaterial({ color: 0x888888, roughness:0.3 }));
-            ramp.rotation.x = -Math.atan(h / 6);
+            ramp.rotation.x = -Math.atan(h ,  6);
             ramp.position.set(x + floorSize/2 + 3, h/2, z);
             ramp.userData.isFloor = true;
             chunkGroup.add(ramp);
@@ -353,6 +354,11 @@ function updateChunks(playerX, playerZ) {
         if (Math.abs(cx - currentChunkX) > viewDistance || Math.abs(cz - currentChunkZ) > viewDistance) {
             scene.remove(group);
             loadedChunks.delete(key);
+
+             // ✅ colliders에서도 제거
+        group.children.forEach(obj => {
+            colliders.floors = colliders.floors.filter(f => f !== obj);
+            colliders.walls = colliders.walls.filter(w => w !== obj);
         }
     });
 }
@@ -367,9 +373,11 @@ function updateChunks(playerX, playerZ) {
         
         // 게임 시작
         startScreen.addEventListener('click', () => { 
+            
             state.isGameActive = true; 
     player.userData.velocity.y = 0;   // 🔒 중력 리셋
     updateGround(player);             // ⭐ 바닥에 딱 붙임
+updateChunks(player.position.x, player.position.z); // ✅ 추가
 
             document.body.requestPointerLock(); 
             startScreen.style.display = 'none';
@@ -691,6 +699,10 @@ updateGround(boss);
         }
 
         function animate() {
+            if (state.isGameActive) {
+    updateChunks(player.position.x, player.position.z); // ✅ 추가
+}
+
 requestAnimationFrame(animate);
                 if (!state.isGameActive) return; // 🔒 여기!!! 터치 전엔 게임 정지
             if (state.isGameActive && !player.userData.isGrounded) {
