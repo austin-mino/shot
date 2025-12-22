@@ -266,6 +266,7 @@ function box(w, h, d, x, y, z) {
 }
 
 
+
 function createBusanMapSimplified() {
     // 재질(Materials)
     const matFloor = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.8 });
@@ -277,7 +278,9 @@ function createBusanMapSimplified() {
     // 바닥
     const ground = new THREE.Mesh(new THREE.BoxGeometry(200, 1, 200), matFloor);
     ground.position.set(0, -0.5, 0);
+    ground.userData.isFloor = true;
     scene.add(ground);
+    colliders.floors.push(ground);
 
     // 양쪽 큰 건물 (3층)
     const buildingPositions = [-60, 60];
@@ -292,8 +295,9 @@ function createBusanMapSimplified() {
             );
             floor.position.set(x, buildingHeight/2 + i*buildingHeight, 0);
             scene.add(floor);
+            colliders.walls.push(floor);
 
-            // 창문 구멍 (외부로 나갈 수 있는 구멍)
+            // 창문 구멍
             const window = new THREE.Mesh(
                 new THREE.BoxGeometry(12, 5, 1),
                 matGlass
@@ -301,7 +305,7 @@ function createBusanMapSimplified() {
             window.position.set(x, buildingHeight/2 + i*buildingHeight, buildingDepth/2 + 0.5);
             scene.add(window);
 
-            // 내부 구조물 (책상/상자 등 단순화)
+            // 내부 구조물 (단순화)
             const box = new THREE.Mesh(
                 new THREE.BoxGeometry(5, 3, 5),
                 matWall
@@ -309,7 +313,7 @@ function createBusanMapSimplified() {
             box.position.set(x - 5, buildingHeight/2 + i*buildingHeight, 0);
             scene.add(box);
 
-            // 경사로(Ramp) - 1층 → 2층 → 3층
+            // 경사로(Ramp)
             if (i > 0) {
                 const rampLength = 15;
                 const rampHeight = buildingHeight;
@@ -320,6 +324,8 @@ function createBusanMapSimplified() {
                 ramp.position.set(x - 5, buildingHeight*(i-1) + rampHeight/2, buildingDepth/2 - rampLength/2);
                 ramp.rotation.x = -Math.atan(rampHeight / rampLength);
                 scene.add(ramp);
+                colliders.floors.push(ramp); // 경사로도 바닥 판정
+                ramp.userData.isFloor = true;
             }
         }
 
@@ -330,6 +336,7 @@ function createBusanMapSimplified() {
         );
         door.position.set(x, 4, buildingDepth/2 + 0.5);
         scene.add(door);
+        colliders.walls.push(door);
     });
 
     // 중앙 광장 + 대형 북
@@ -345,20 +352,36 @@ function createBusanMapSimplified() {
         const obj = new THREE.Mesh(new THREE.BoxGeometry(4, 4, 4), matWall);
         obj.position.set(i, 2, -10);
         scene.add(obj);
+        colliders.walls.push(obj);
     }
 
     // 맵 경계
     const wallH = 15;
-    scene.add(new THREE.Mesh(new THREE.BoxGeometry(200, wallH, 2), matWall).setPosition(0, wallH/2, 100));
-    scene.add(new THREE.Mesh(new THREE.BoxGeometry(200, wallH, 2), matWall).setPosition(0, wallH/2, -100));
-    scene.add(new THREE.Mesh(new THREE.BoxGeometry(2, wallH, 200), matWall).setPosition(-100, wallH/2, 0));
-    scene.add(new THREE.Mesh(new THREE.BoxGeometry(2, wallH, 200), matWall).setPosition(100, wallH/2, 0));
+    const walls = [
+        new THREE.Mesh(new THREE.BoxGeometry(200, wallH, 2), matWall),
+        new THREE.Mesh(new THREE.BoxGeometry(200, wallH, 2), matWall),
+        new THREE.Mesh(new THREE.BoxGeometry(2, wallH, 200), matWall),
+        new THREE.Mesh(new THREE.BoxGeometry(2, wallH, 200), matWall)
+    ];
+    const positions = [
+        [0, wallH/2, 100],
+        [0, wallH/2, -100],
+        [-100, wallH/2, 0],
+        [100, wallH/2, 0]
+    ];
+
+    walls.forEach((w, idx) => {
+        w.position.set(...positions[idx]);
+        scene.add(w);
+        colliders.walls.push(w);
+    });
 
     // 조명
     const pointLight = new THREE.PointLight(0x00ffff, 1, 200);
     pointLight.position.set(0, 50, 0);
     scene.add(pointLight);
 }
+
 
         // 씬, 렌더러, 카메라 세팅 후
 createBusanMapSimplified();  // 여기서 맵 생성
