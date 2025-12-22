@@ -283,6 +283,7 @@ function createBusanMap() {
     // 2. 바닥 깔기 (기본)
     const ground = new THREE.Mesh(new THREE.BoxGeometry(200, 1, 200), matFloor);
     ground.position.set(0, -0.5, 0);
+    ground.userData.isFloor = true;   // 여기가 핵심
     ground.receiveShadow = true;
     scene.add(ground);
     // (물리 엔진 버전에 따라 colliders.floors 혹은 obstacles에 추가 필요)
@@ -375,8 +376,14 @@ function createBusanMap() {
     const pointLight = new THREE.PointLight(0x00ffff, 1, 50);
     pointLight.position.set(10, 10, 10);
     scene.add(pointLight);
+
+    
 }
 
+
+
+        // 게임 시작 전 맵 생성
+createBusanMap();   // <<< 이 줄이 빠졌음
 
 
         // --- 4. 컨트롤 & 카메라 로직 개선 ---
