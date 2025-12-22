@@ -267,130 +267,145 @@ function box(w, h, d, x, y, z) {
 
 
 // ==========================================
-// ⛩️ 오버워치 부산 맵 FULL 디테일
+// ⛩️ 오버워치 부산 맵 최종 완전판
 // ==========================================
-function createBusanMapFullRealistic() {
-    console.log("⛩️ Loading Realistic Full Busan Map...");
+function createBusanMapPerfect() {
+    console.log("⛩️ Loading Perfect Busan Map...");
 
-    // -----------------------------
     // 1️⃣ 재질(Materials)
-    // -----------------------------
     const matFloor = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.8 });
     const matWoodRed = new THREE.MeshStandardMaterial({ color: 0x8B0000, roughness: 0.6 });
     const matRoofGreen = new THREE.MeshStandardMaterial({ color: 0x004d40, roughness: 0.5 });
     const matWhiteWall = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 0.2 });
-    const matGlass = new THREE.MeshStandardMaterial({ color: 0x87CEEB, roughness: 0.1, transparent: true, opacity: 0.5 });
+    const matGlass = new THREE.MeshStandardMaterial({ color: 0x87CEEB, roughness: 0.1, transparent: true, opacity: 0.7 });
     const matNeon = new THREE.MeshStandardMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 0.8 });
-    const matBox = new THREE.MeshStandardMaterial({ color: 0x777777, roughness: 0.5 });
+    const matDrum = new THREE.MeshStandardMaterial({ color: 0xFFD700 });
+    const matBench = new THREE.MeshStandardMaterial({ color: 0x654321 });
+    const matSign = new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0xffff00, emissiveIntensity: 0.5 });
 
-    // -----------------------------
     // 2️⃣ 바닥
-    // -----------------------------
-    const ground = new THREE.Mesh(new THREE.BoxGeometry(500, 1, 500), matFloor);
+    const ground = new THREE.Mesh(new THREE.BoxGeometry(300, 1, 300), matFloor);
     ground.position.set(0, -0.5, 0);
-    ground.userData.isFloor = true;
     ground.receiveShadow = true;
+    ground.userData.isFloor = true;
     scene.add(ground);
     if (typeof colliders !== 'undefined') colliders.floors.push(ground);
 
-    // -----------------------------
-    // 3️⃣ 헬퍼: 박스/벽/층 생성
-    // -----------------------------
+    // 3️⃣ 헬퍼 함수: 박스 생성 + 충돌
     function addBlock(x, y, z, w, h, d, mat, type = 'wall') {
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
         mesh.position.set(x, y + h / 2, z);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
-        mesh.userData.box = new THREE.Box3();
-        mesh.geometry.computeBoundingBox();
         scene.add(mesh);
+
         if (typeof colliders !== 'undefined') {
             if (type === 'wall') colliders.walls.push(mesh);
             else colliders.floors.push(mesh);
-        } else if (typeof obstacles !== 'undefined') obstacles.push(mesh);
+        } else if (typeof obstacles !== 'undefined') {
+            obstacles.push(mesh);
+        }
         return mesh;
     }
 
-    // -----------------------------
-    // 4️⃣ 사찰 영역
-    // -----------------------------
-    addBlock(-150, 0, -150, 4, 12, 4, matWoodRed);
-    addBlock(-140, 0, -150, 4, 12, 4, matWoodRed);
-    addBlock(-145, 12, -150, 20, 3, 6, matRoofGreen);
+    // ==========================================
+    // 🏯 왼쪽 건물 (3층)
+    // ==========================================
+    const leftBuildingX = -80;
+    const buildingW = 25;
+    const buildingD = 40;
+    const floorH = 5;
 
-    const drum = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 6, 32), new THREE.MeshStandardMaterial({ color: 0xFFD700 }));
-    drum.position.set(-130, 3, -130);
-    scene.add(drum);
-    const drumCol = addBlock(-130, 0, -130, 12, 6, 12, new THREE.MeshBasicMaterial({ visible: false }));
+    for (let i = 0; i < 3; i++) {
+        addBlock(leftBuildingX, i * floorH, 0, buildingW, 1, buildingD, matFloor, 'floor');
 
-    // -----------------------------
-    // 5️⃣ 시내 3층 건물
-    // -----------------------------
-    const buildingX = 100, buildingZ = 100;
-    const floorHeight = 5;
-    const floorCount = 3;
+        addBlock(leftBuildingX - buildingW / 2, i * floorH + floorH / 2, 0, 1, floorH, buildingD, matWhiteWall);
+        addBlock(leftBuildingX + buildingW / 2, i * floorH + floorH / 2, 0, 1, floorH, buildingD, matWhiteWall);
+        addBlock(leftBuildingX, i * floorH + floorH / 2, -buildingD / 2, buildingW, floorH, 1, matWhiteWall);
+        addBlock(leftBuildingX, i * floorH + floorH / 2, buildingD / 2, buildingW, floorH, 1, matWhiteWall);
 
-    for (let floor = 0; floor < floorCount; floor++) {
-        const yBase = floor * floorHeight;
+        // 창문
+        addBlock(leftBuildingX - buildingW / 2 + 0.5, i * floorH + 2.5, -10, 0.5, 3, 8, matGlass);
+        addBlock(leftBuildingX + buildingW / 2 - 0.5, i * floorH + 2.5, 10, 0.5, 3, 8, matGlass);
 
-        // 1. 벽체
-        addBlock(buildingX, yBase, buildingZ, 20, floorHeight, 30, matWhiteWall); // 앞
-        addBlock(buildingX, yBase, buildingZ - 15, 20, floorHeight, 2, matWhiteWall); // 뒤
-        addBlock(buildingX - 10, yBase, buildingZ - 7.5, 2, floorHeight, 15, matWhiteWall); // 좌
-        addBlock(buildingX + 10, yBase, buildingZ - 7.5, 2, floorHeight, 15, matWhiteWall); // 우
+        // 내부 구조물
+        addBlock(leftBuildingX, i * floorH + 0.5, 0, 5, 1, 5, matWoodRed, 'floor');
 
-        // 2. 창문 구멍
-        addBlock(buildingX, yBase + 2, buildingZ - 15, 16, 3, 1, new THREE.MeshStandardMaterial({ color: 0x87CEEB, transparent: true, opacity: 0.3 }));
-
-        // 3. 층간 바닥
-        if (floor > 0) addBlock(buildingX, yBase, buildingZ, 20, 1, 30, matFloor, 'floor');
-
-        // 4. 내부 구조물 (방, 박스, 장애물)
-        addBlock(buildingX - 5, yBase, buildingZ - 5, 4, 2, 4, matBox);
-        addBlock(buildingX + 5, yBase, buildingZ + 5, 3, 2, 3, matBox);
-
-        // 5. 계단 (층간 이동)
-        if (floor < floorCount - 1) {
-            for (let i = 0; i < 5; i++) {
-                addBlock(buildingX - 8 + i * 2, yBase + i * 1, buildingZ - 12 + i * 1.5, 2, 1, 2, matWhiteWall, 'floor');
-            }
-        }
-
-        // 6. 난간 (2층 이상)
-        if (floor > 0) addBlock(buildingX, yBase + floorHeight - 1, buildingZ, 20, 1, 1, matGlass);
+        // 천장 구조
+        addBlock(leftBuildingX, i * floorH + floorH - 0.5, 0, buildingW, 0.5, buildingD, matFloor, 'floor');
     }
 
-    // 7. 출입구 (1층)
-    addBlock(buildingX, 0, buildingZ + 15, 4, 4, 2, matWoodRed);
+    // 입구 & 계단
+    addBlock(leftBuildingX, 0.5, buildingD / 2 + 1, 5, 1, 2, matWoodRed, 'floor');
+    for (let i = 0; i < 10; i++) {
+        addBlock(leftBuildingX - buildingW / 4, i * 0.5, -buildingD / 4 + i, 3, 0.5, 2, matWhiteWall, 'floor');
+    }
 
-    // -----------------------------
-    // 6️⃣ 광장 & 네온
-    // -----------------------------
-    addBlock(0, 0, 0, 10, 5, 2, matNeon);
-    addBlock(0, 0, -10, 10, 5, 2, matNeon);
+    // ==========================================
+    // 🏯 오른쪽 건물 (3층)
+    // ==========================================
+    const rightBuildingX = 80;
 
-    // -----------------------------
-    // 7️⃣ 외곽 경계
-    // -----------------------------
-    const wallH = 25;
-    addBlock(0, 0, 250, 500, wallH, 2, matWhiteWall); // 앞
-    addBlock(0, 0, -250, 500, wallH, 2, matRoofGreen); // 뒤
-    addBlock(-250, 0, 0, 2, wallH, 500, matWoodRed); // 좌
-    addBlock(250, 0, 0, 2, wallH, 500, matWhiteWall); // 우
+    for (let i = 0; i < 3; i++) {
+        addBlock(rightBuildingX, i * floorH, 0, buildingW, 1, buildingD, matFloor, 'floor');
 
-    // -----------------------------
-    // 8️⃣ 조명
-    // -----------------------------
-    const pointLight = new THREE.PointLight(0x00ffff, 2, 200);
-    pointLight.position.set(0, 50, 0);
-    scene.add(pointLight);
+        addBlock(rightBuildingX - buildingW / 2, i * floorH + floorH / 2, 0, 1, floorH, buildingD, matWhiteWall);
+        addBlock(rightBuildingX + buildingW / 2, i * floorH + floorH / 2, 0, 1, floorH, buildingD, matWhiteWall);
+        addBlock(rightBuildingX, i * floorH + floorH / 2, -buildingD / 2, buildingW, floorH, 1, matWhiteWall);
+        addBlock(rightBuildingX, i * floorH + floorH / 2, buildingD / 2, buildingW, floorH, 1, matWhiteWall);
 
-    console.log("✅ Realistic Full Busan Map Loaded!");
+        addBlock(rightBuildingX - buildingW / 2 + 0.5, i * floorH + 2.5, -10, 0.5, 3, 8, matGlass);
+        addBlock(rightBuildingX + buildingW / 2 - 0.5, i * floorH + 2.5, 10, 0.5, 3, 8, matGlass);
+
+        addBlock(rightBuildingX, i * floorH + 0.5, 0, 5, 1, 5, matWoodRed, 'floor');
+        addBlock(rightBuildingX, i * floorH + floorH - 0.5, 0, buildingW, 0.5, buildingD, matFloor, 'floor');
+    }
+
+    addBlock(rightBuildingX, 0.5, buildingD / 2 + 1, 5, 1, 2, matWoodRed, 'floor');
+    for (let i = 0; i < 10; i++) {
+        addBlock(rightBuildingX - buildingW / 4, i * 0.5, -buildingD / 4 + i, 3, 0.5, 2, matWhiteWall, 'floor');
+    }
+
+    // ==========================================
+    // 🥁 중앙 광장
+    // ==========================================
+    const drum = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 5, 32), matDrum);
+    drum.position.set(0, 2.5, 0);
+    scene.add(drum);
+
+    const drumCol = new THREE.Mesh(new THREE.BoxGeometry(8, 5, 8), new THREE.MeshBasicMaterial({ visible: false }));
+    drumCol.position.set(0, 2.5, 0);
+    if (typeof obstacles !== 'undefined') obstacles.push(drumCol);
+    else if (typeof colliders !== 'undefined') colliders.walls.push(drumCol);
+
+    // 광장 소품 (벤치, 안내판)
+    addBlock(0, 0.5, -10, 3, 1, 3, matBench);
+    addBlock(0, 0.5, 10, 3, 1, 3, matBench);
+    addBlock(-5, 1, 0, 1, 3, 0.5, matSign);
+    addBlock(5, 1, 0, 1, 3, 0.5, matSign);
+
+    // ==========================================
+    // 🌌 외곽 경계
+    // ==========================================
+    const wallH = 20;
+    addBlock(0, 0, 150, 300, wallH, 2, matWhiteWall);
+    addBlock(0, 0, -150, 300, wallH, 2, matWhiteWall);
+    addBlock(-150, 0, 0, 2, wallH, 300, matWhiteWall);
+    addBlock(150, 0, 0, 2, wallH, 300, matWhiteWall);
+
+    // 천장 조명
+    const pointLight1 = new THREE.PointLight(0x00ffff, 1, 100);
+    pointLight1.position.set(0, 50, 0);
+    scene.add(pointLight1);
+
+    const pointLight2 = new THREE.PointLight(0xffaa00, 0.8, 50);
+    pointLight2.position.set(0, 10, 0);
+    scene.add(pointLight2);
 }
 
 
-        // 씬에 맵 생성
-createBusanMapFullRealistic();
+        createBusanMapPerfect();  // 씬에 부산 맵 추가
+
 
 
         // --- 4. 컨트롤 & 카메라 로직 개선 ---
@@ -728,6 +743,8 @@ requestAnimationFrame(animate);
     updateGround(player);
 }
 
+             requestAnimationFrame(animate);
+    renderer.render(scene, camera);
 
 
             // 연사 처리
