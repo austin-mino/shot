@@ -422,7 +422,8 @@ function updateGround(player) {
         const hit = hits[0];
         const footHeight = 1.6;
 
-        if (hit.distance < footHeight + 0.25 && player.userData.velocity.y <= 0) {
+       if (hit.distance < footHeight + 0.05 && player.userData.velocity.y <= 0) {
+
             player.position.y = hit.point.y + footHeight;
             player.userData.velocity.y = 0;
             player.userData.isGrounded = true;
@@ -668,11 +669,21 @@ if (fireCooldown > 0) fireCooldown--;
             player.position.z += move.z; if(checkCollision(player.position, player.userData.boxSize).hit) player.position.z -= move.z;
 
             // 점프 & 중력
-            if(input.space && player.userData.isGrounded) { player.userData.velocity.y = physics.jump; player.userData.isGrounded = false; }
-            player.userData.velocity.y += physics.gravity; player.position.y += player.userData.velocity.y;
+           // 점프
+if (input.space && player.userData.isGrounded) {
+    player.userData.velocity.y = physics.jump;
+    player.userData.isGrounded = false;
+}
 
-           
+// ✅ 공중에 있을 때만 중력
+if (!player.userData.isGrounded) {
+    player.userData.velocity.y += physics.gravity;
+    player.position.y += player.userData.velocity.y;
+}
+
+// 바닥 판정은 항상 마지막
 updateGround(player);
+
 
             // 3. 총알 업데이트
             for (let i = state.bullets.length - 1; i >= 0; i--) {
