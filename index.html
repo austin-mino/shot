@@ -248,6 +248,22 @@ scene.add(fillLight);
 player.userData.velocity.y = 0; // 🔒 초기 낙하 차단
 
         scene.add(player);
+function box(w, h, d, x, y, z) {
+    const geo = new THREE.BoxGeometry(w, h, d);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x555555 });
+    const mesh = new THREE.Mesh(geo, mat);
+
+    mesh.position.set(x, y, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+
+    scene.add(mesh);
+
+    // 바닥 판정용
+    colliders.floors.push(mesh);
+
+    return mesh;
+}
 
 function generateDenseStructures() {
     const size = 700;
