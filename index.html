@@ -402,31 +402,30 @@ createMapBoundaryWalls();
    경사로
 ================================ */
 
-function createRampToRoof(x, z, width, height) {
-
-    const rampWidth = 1.35;
-
+function createRampToRoof(x, z, width, height, depth = 1.2) {
+    const rampWidth = 1.35; // 좌우 폭
     const horizontal = width;
     const rampLength = Math.sqrt(height * height + horizontal * horizontal);
     const angle = Math.atan2(height, horizontal);
 
-    const geometry = new THREE.PlaneGeometry(rampLength, rampWidth);
-    geometry.rotateY(Math.PI / 2);
+    // BoxGeometry 생성 (Plane보다 두께가 있음)
+    const geometry = new THREE.BoxGeometry(rampLength, depth, rampWidth);
 
     const ramp = new THREE.Mesh(
         geometry,
         new THREE.MeshStandardMaterial({
             color: 0x777777,
-            roughness: 0.5,
-            side: THREE.DoubleSide
+            roughness: 0.5
         })
     );
 
+    ramp.rotation.y = Math.PI / 2;  // 기존 Plane과 동일
     ramp.rotation.x = -angle;
 
+    // BoxGeometry는 중심이 중간이므로 높이 위치 조정
     ramp.position.set(
         x + width / 2 + 0.01,
-        groundY + height / 2,
+        groundY + height / 2 + depth / 2,  // 두께 반만큼 올려줌
         z
     );
 
@@ -436,6 +435,7 @@ function createRampToRoof(x, z, width, height) {
     colliders.floors.push(ramp);
     scene.add(ramp);
 }
+
 
 /* ===============================
    건물
@@ -1276,13 +1276,18 @@ updateGround(player);
                     const oldPos=e.position.clone(); e.position.add(rushMove);
                     if(checkCollision(e.position,e.userData.boxSize).hit) e.position.copy(oldPos);
                 }
-                if(type==='summoner'){
-                    for(let i=0;i<phase;i++){
-                        const minion=createDetailedHumanoid(0xff7777,false);
-                        minion.position.copy(e.position).add(new THREE.Vector3((Math.random()-0.5)*6,0,(Math.random()-0.5)*6));
-                        scene.add(minion); state.enemies.push(minion);
-                    }
-                }
+               if(type==='summoner'){
+    for(let i=0;i<phase;i++){
+        const minion = createDetailedHumanoid(0xff7777,false);
+        minion.position.copy(e.position).add(new THREE.Vector3((Math.random()-0.5)*6,0,(Math.random()-0.5)*6));
+        minion.userData.isGunner = true;      // ✅ gunner 속성 지정
+        minion.userData.shootCooldown = 1.5;  // ✅ 초기 쿨타임
+        scene.add(minion);
+        state.enemies.push(minion);
+        state.gunnerCount++;                   // ✅ 카운트 증가
+    }
+}
+
                 if(phase===3) camera.position.add(new THREE.Vector3((Math.random()-0.5)*0.4,(Math.random()-0.5)*0.4,0));
             }
         } else { if(dist<1.2){ state.hp-=0.5; document.getElementById('damage-overlay').style.opacity=0.3; } }
