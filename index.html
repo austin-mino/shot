@@ -402,28 +402,28 @@ createMapBoundaryWalls();
    경사로
 ================================ */
 
-function createRampToRoof(buildingX, buildingZ, buildingWidth, buildingDepth, height, depth = 1.2) {
-    const rampWidth = 1.35;                // 좌우 폭
-    const horizontal = buildingWidth;       // 경사로 수평 길이
+function createRampToRoof(buildingX, buildingZ, buildingWidth, buildingDepth, height, depth = 2) {
+    const rampWidth = buildingWidth * 0.8;           // 건물 폭보다 약간 좁게
+    const horizontal = buildingDepth;                // 경사로 수평 길이 (건물 앞쪽)
     const rampLength = Math.sqrt(horizontal * horizontal + height * height);
     const angle = Math.atan2(height, horizontal);
 
-    // BoxGeometry 생성 (두께 포함)
-    const geometry = new THREE.BoxGeometry(rampLength, depth, rampWidth);
+    // BoxGeometry 생성
+    const geometry = new THREE.BoxGeometry(rampWidth, depth, rampLength);
     const material = new THREE.MeshStandardMaterial({
-        color: 0x777777,    // 회색
+        color: 0x777777,
         roughness: 0.5
     });
     const ramp = new THREE.Mesh(geometry, material);
 
-    // 회전
-    ramp.rotation.x = -angle; // 경사 방향
-    ramp.rotation.y = 0;      // 좌우 회전 없음
+    // 경사 회전: Z축을 기준으로 건물 앞쪽으로 기울이기
+    ramp.rotation.x = -angle;
+    ramp.rotation.y = 0;
 
-    // 위치 계산 (건물 앞쪽 중앙 기준)
-    const startX = buildingX + horizontal / 2;                // 건물 중앙 X
-    const startY = groundY + height / 2;                     // 지면에서 경사로 중앙 높이
-    const startZ = buildingZ + buildingDepth / 2;            // 건물 중앙 Z
+    // 위치 계산: 건물 앞쪽으로 배치하고, 높이는 중앙 기준
+    const startX = buildingX;                        // 건물 중앙 X
+    const startY = groundY + height / 2;            // 지면에서 중앙 높이
+    const startZ = buildingZ + buildingDepth / 2 + rampLength / 2 * Math.cos(angle); // 건물 앞쪽
 
     ramp.position.set(startX, startY, startZ);
 
@@ -432,10 +432,10 @@ function createRampToRoof(buildingX, buildingZ, buildingWidth, buildingDepth, he
     ramp.castShadow = true;
     ramp.userData.isFloor = true;
 
-    // 밟을 수 있는 collider 등록
     colliders.floors.push(ramp);
     scene.add(ramp);
 }
+
 
 
 
@@ -477,21 +477,24 @@ function createBuilding(x, z) {
     colliders.walls.push(building);
     scene.add(building);
 
+    // 옥상: Plane → 얇은 Box로 변경
+    const roofThickness = 0.2; // 두께
     const roof = new THREE.Mesh(
-        new THREE.PlaneGeometry(width, depth),
+        new THREE.BoxGeometry(width, roofThickness, depth),
         floorMat
     );
 
-    roof.rotation.x = -Math.PI / 2;
-    roof.position.set(x, groundY + height + 0.08, z);
+    roof.position.set(x, groundY + height + roofThickness / 2, z); // 높이 중앙 기준
     roof.receiveShadow = true;
+    roof.castShadow = true;
     roof.userData.isFloor = true;
 
     colliders.floors.push(roof);
     scene.add(roof);
 
-    createRampToRoof(x, z, width, height);
+    createRampToRoof(x, z, width, depth, height);
 }
+
 
 /* ===============================
    광장
@@ -1208,6 +1211,7 @@ const e = createDetailedHumanoid(0xff4444, false); // 일반 적 빨강
 e.userData.boxSize = new THREE.Vector3(0.8, 1.8, 0.8);
 
 // Gunner 여부 설정 (랜덤 또는 원하는 기준)
+e.userData.shootCooldown = Math.random() * 1.5; // 초기값 랜덤
 e.userData.isGunner = Math.random() < 0.3; // 30% 확률로 Gunner
 
 // Gunner 색상 변경
