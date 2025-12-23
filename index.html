@@ -244,7 +244,7 @@ scene.add(fillLight);
 
         const player = createDetailedHumanoid(0x0088ff, true);
         player.position.set(5, 24, 0); // 🔥 footHeight보다 높게
-player.userData.velocity.y = 24; // 🔒 초기 낙하 차단
+player.userData.velocity.y = 0; // 🔒 초기 낙하 차단
 
         scene.add(player);
 function box(w, h, d, x, y, z) {
@@ -571,6 +571,13 @@ function updateGround(player) {
         }
     }
     player.userData.isGrounded = false;
+
+    // 🛑 최후 안전장치
+if (player.position.y < groundY - 5) {
+    player.position.y = groundY + 2;
+    player.userData.velocity.y = 0;
+}
+
 }
 
        function updateEnemyGround(enemy) {
@@ -833,9 +840,15 @@ updateGround(boss);
         player.userData.velocity.y = physics.jump;
         player.userData.isGrounded = false;
     }
-    player.userData.velocity.y += physics.gravity;
-    player.position.y += player.userData.velocity.y;
-    updateGround(player);
+   // 1. 중력
+player.userData.velocity.y += physics.gravity;
+
+// 2. 이동
+player.position.y += player.userData.velocity.y;
+
+// 3. 즉시 바닥 보정
+updateGround(player);
+
 
     // 7. 총알 업데이트
     for (let i = state.bullets.length-1; i>=0; i--) {
