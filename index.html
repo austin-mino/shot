@@ -344,7 +344,7 @@ function createRampToRoof(x, z, width, height) {
         })
     );
 
-    ramp.rotation.x = -angle;
+    ramp.rotation.z = -angle;
 
     // 건물 벽에 밀착 (도로 침범 없음)
     ramp.position.set(
@@ -1017,10 +1017,18 @@ function playerIntersectsWall(pos) {
         if(move.lengthSq()>0.01) player.rotation.y = -Math.atan2(input.joyY,input.joyX)+Math.PI/2;
     }
     move.normalize().multiplyScalar(0.25);
-    player.position.add(new THREE.Vector3(move.x, 0, move.z));
-   if (playerIntersectsWall(player.position)) {
-    player.position.sub(new THREE.Vector3(move.x, 0, move.z));
+  // X 이동 먼저
+player.position.x += move.x;
+if (playerIntersectsWall(player.position)) {
+    player.position.x -= move.x;
 }
+
+// Z 이동 다음
+player.position.z += move.z;
+if (playerIntersectsWall(player.position)) {
+    player.position.z -= move.z;
+}
+
 
 
     // 6. 점프 & 중력
