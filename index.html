@@ -265,138 +265,184 @@ function box(w, h, d, x, y, z) {
 }
 
 
+/* ===============================
+   기본 설정
+================================ */
 
 const colliders = { floors: [], walls: [] };
 
-// 하늘
+const groundY = 18.4;
+const spacing = 25;
+const viewDistance = 3;
+
+const generatedPositions = new Set();
+
+/* ===============================
+   환경
+================================ */
+
 scene.background = new THREE.Color(0x87ceeb);
 scene.fog = new THREE.FogExp2(0x87ceeb, 0.001);
 
-// 지도 관리
-const generatedPositions = new Set(); // "x_z" -> 이미 생성된 위치 기록
-const spacing = 25; // 건물 간격
-const viewDistance = 3; // 플레이어 주변 몇 칸까지 생성
-const groundY = 18.5;
+/* ===============================
+   전체 바닥 (무한맵)
+================================ */
 
-// 기본 땅
-function createGround(size = 2000) {
-    const roadMat = new THREE.MeshStandardMaterial({
+function createGround(size = 6000) {
+    const mat = new THREE.MeshStandardMaterial({
         color: 0x2b2b2b,
-        roughness: 0.95,
-        metalness: 0.05
+        roughness: 0.95
     });
 
     const ground = new THREE.Mesh(
         new THREE.PlaneGeometry(size, size),
-        roadMat
+        mat
     );
 
     ground.rotation.x = -Math.PI / 2;
-    ground.position.set(0, groundY, 0);
+    ground.position.y = groundY;
     ground.receiveShadow = true;
-
     ground.userData.isFloor = true;
+
     colliders.floors.push(ground);
     scene.add(ground);
 }
 
 createGround();
 
-// 건물 생성
-function createBuilding(x, z) {
-    const floorMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.8 });
-    const wallColors = [0xdedede, 0xc0b283, 0xa8997a, 0x8ca3b0, 0xb8b0a5];
-    const wallMat = new THREE.MeshStandardMaterial({
-        color: wallColors[Math.floor(Math.random() * wallColors.length)],
-        roughness: 0.3
-    });
+/* ===============================
+   경사로
+================================ */
 
-    const width = 8 + Math.random() * 6;
-    const depth = 8 + Math.random() * 6;
-    const height = 5 + Math.random() * 15;
+function createRampToRoof(x, z, width, height) {
+    const rampLength = height * 1.3;
+    const rampWidth = 4;
 
-    // 바닥
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), floorMat);
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.set(x, groundY, z);
-    floor.userData.isFloor = true;
-    colliders.floors.push(floor);
-
-    // 건물
-    const building = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), wallMat);
-    building.position.set(x, groundY + height / 2, z);
-    colliders.walls.push(building);
-
-    // 옥상
-    const roof = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), floorMat);
-    roof.rotation.x = -Math.PI / 2;
-    roof.position.set(x, groundY + height, z);
-    roof.userData.isFloor = true;
-    colliders.floors.push(roof);
-
-    // 경사로
-   if (Math.random() < 0.5) {
-    const rampLength = 8 + Math.random() * 4;
-    const rampHeight = height;
-
-    const rampAngle = Math.atan2(rampHeight, rampLength);
+    const angle = Math.atan2(height, rampLength);
 
     const ramp = new THREE.Mesh(
-        new THREE.PlaneGeometry(rampLength, width),
+        new THREE.PlaneGeometry(rampLength, rampWidth),
         new THREE.MeshStandardMaterial({
             color: 0x777777,
-            roughness: 0.4
+            roughness: 0.5
         })
     );
 
-    ramp.rotation.x = -rampAngle;
-
-    // 바닥에서 시작해서 옥상에 정확히 닿게 배치
+    ramp.rotation.x = -angle;
     ramp.position.set(
         x + width / 2 + rampLength / 2,
-        groundY + rampHeight / 2,
+        groundY + height / 2,
         z
     );
 
     ramp.receiveShadow = true;
     ramp.userData.isFloor = true;
+
     colliders.floors.push(ramp);
     scene.add(ramp);
 }
+
+/* ===============================
+   건물
+================================ */
+
+function createBuilding(x, z) {
+    const wallColors = [
+        0xdedede, 0xc0b283, 0xa8997a, 0x8ca3b0, 0xb8b0a5
+    ];
+
+    const wallMat = new THREE.MeshStandardMaterial({
+        color: wallColors[Math.floor(Math.random() * wallColors.length)],
+        roughness: 0.35
+    });
+
+    const floorMat = new THREE.MeshStandardMaterial({
+        color: 0x2a2a2a,
+        roughness: 0.8
+    });
+
+    const width = 10 + Math.random() * 6;
+    const depth = 10 + Math.random() * 6;
+    const height = 8 + Math.random() * 18;
+
+    // 건물 본체
+    const building = new THREE.Mesh(
+        new THREE.BoxGeometry(width, height, depth),
+        wallMat
+    );
+
+    building.position.set(x, groundY + height / 2, z);
+    building.castShadow = true;
+
+    colliders.walls.push(building);
+    scene.add(building);
+
+    // 옥상
+    const roof = new THREE.Mesh(
+        new THREE.PlaneGeometry(width, depth),
+        floorMat
+    );
+
+    roof.rotation.x = -Math.PI / 2;
+    roof.position.set(x, groundY + height, z);
+    roof.receiveShadow = true;
+    roof.userData.isFloor = true;
+
+    colliders.floors.push(roof);
+    scene.add(roof);
+
+    // 경사로
+    createRampToRoof(x, z, width, height);
 }
 
-// 광장 생성
+/* ===============================
+   광장
+================================ */
+
 function createPlaza(x, z) {
-    const size = 15 + Math.random() * 10;
-    const matPlaza = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.8 });
-    const plaza = new THREE.Mesh(new THREE.PlaneGeometry(size, size), matPlaza);
+    const size = 18 + Math.random() * 12;
+
+    const plaza = new THREE.Mesh(
+        new THREE.PlaneGeometry(size, size),
+        new THREE.MeshStandardMaterial({
+            color: 0x555555,
+            roughness: 0.85
+        })
+    );
+
     plaza.rotation.x = -Math.PI / 2;
     plaza.position.set(x, groundY, z);
+    plaza.receiveShadow = true;
     plaza.userData.isFloor = true;
+
     colliders.floors.push(plaza);
     scene.add(plaza);
 }
 
-// 플레이어 주변 도시 생성
+/* ===============================
+   도시 생성 (무한)
+================================ */
+
 function updateCity(playerX, playerZ) {
     const px = Math.floor(playerX / spacing);
     const pz = Math.floor(playerZ / spacing);
 
     for (let dx = -viewDistance; dx <= viewDistance; dx++) {
         for (let dz = -viewDistance; dz <= viewDistance; dz++) {
+
             const key = `${px + dx}_${pz + dz}`;
-            if (!generatedPositions.has(key)) {
-                const x = (px + dx) * spacing + (Math.random() - 0.5) * 10;
-                const z = (pz + dz) * spacing + (Math.random() - 0.5) * 10;
+            if (generatedPositions.has(key)) continue;
 
-                if (Math.random() < 0.2) {
-                    createPlaza(x, z);
-                } else {
-                    createBuilding(x, z);
-                }
+            const x = (px + dx) * spacing;
+            const z = (pz + dz) * spacing;
 
-                generatedPositions.add(key);
+            if (Math.random() < 0.25) {
+                createPlaza(x, z);
+            } else {
+                createBuilding(x, z);
             }
+
+            generatedPositions.add(key);
         }
     }
 }
