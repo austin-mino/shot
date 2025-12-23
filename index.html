@@ -285,6 +285,11 @@ const groundY = 18.4;
 const spacing = 25;
 const viewDistance = 3;
 
+const MAP_SIZE = 500;
+const MAP_HALF = MAP_SIZE / 2;
+const WALL_HEIGHT = 60;
+const WALL_THICKNESS = 6;
+
 const generatedPositions = new Set();
 
 /* ===============================
@@ -295,10 +300,10 @@ scene.background = new THREE.Color(0x87ceeb);
 scene.fog = new THREE.FogExp2(0x87ceeb, 0.001);
 
 /* ===============================
-   전체 바닥 (무한맵)
+   전체 바닥 (고정 맵)
 ================================ */
 
-function createGround(size = 6000) {
+function createGround(size = 500) {
     const mat = new THREE.MeshStandardMaterial({
         color: 0x2b2b2b,
         roughness: 0.95
@@ -318,14 +323,87 @@ function createGround(size = 6000) {
     scene.add(ground);
 }
 
-createGround();
+createGround(MAP_SIZE);
+
+/* ===============================
+   맵 경계 벽
+================================ */
+
+function createMapBoundaryWalls() {
+
+    const mat = new THREE.MeshStandardMaterial({
+        color: 0x2a2a2a,
+        roughness: 0.7
+    });
+
+    function makeWall(w, h, d, x, y, z) {
+        const wall = new THREE.Mesh(
+            new THREE.BoxGeometry(w, h, d),
+            mat
+        );
+
+        wall.position.set(x, y, z);
+        wall.castShadow = true;
+        wall.receiveShadow = true;
+
+        wall.geometry.computeBoundingBox();
+        wall.userData.box = new THREE.Box3().setFromObject(wall);
+
+        colliders.walls.push(wall);
+        scene.add(wall);
+    }
+
+    const y = groundY + WALL_HEIGHT / 2;
+
+    // 북
+    makeWall(
+        MAP_SIZE + WALL_THICKNESS * 2,
+        WALL_HEIGHT,
+        WALL_THICKNESS,
+        0,
+        y,
+        MAP_HALF + WALL_THICKNESS / 2
+    );
+
+    // 남
+    makeWall(
+        MAP_SIZE + WALL_THICKNESS * 2,
+        WALL_HEIGHT,
+        WALL_THICKNESS,
+        0,
+        y,
+        -MAP_HALF - WALL_THICKNESS / 2
+    );
+
+    // 동
+    makeWall(
+        WALL_THICKNESS,
+        WALL_HEIGHT,
+        MAP_SIZE,
+        MAP_HALF + WALL_THICKNESS / 2,
+        y,
+        0
+    );
+
+    // 서
+    makeWall(
+        WALL_THICKNESS,
+        WALL_HEIGHT,
+        MAP_SIZE,
+        -MAP_HALF - WALL_THICKNESS / 2,
+        y,
+        0
+    );
+}
+
+createMapBoundaryWalls();
 
 /* ===============================
    경사로
 ================================ */
+
 function createRampToRoof(x, z, width, height) {
 
-    // ✅ 사람 넓이 × 1.5
     const rampWidth = 1.35;
 
     const horizontal = width;
@@ -344,23 +422,18 @@ function createRampToRoof(x, z, width, height) {
         })
     );
 
-    ramp.rotation.z = -angle;
+    ramp.rotation.x = -angle;
 
-    // 건물 벽에 밀착 (도로 침범 없음)
     ramp.position.set(
         x + width / 2 + 0.01,
         groundY + height / 2,
         z
     );
 
-    ramp.updateMatrixWorld(true);
-
     ramp.receiveShadow = true;
     ramp.userData.isFloor = true;
 
     colliders.floors.push(ramp);
-    colliders.walls.push(ramp);
-
     scene.add(ramp);
 }
 
@@ -369,6 +442,7 @@ function createRampToRoof(x, z, width, height) {
 ================================ */
 
 function createBuilding(x, z) {
+
     const wallColors = [
         0xdedede, 0xc0b283, 0xa8997a, 0x8ca3b0, 0xb8b0a5
     ];
@@ -383,28 +457,24 @@ function createBuilding(x, z) {
         roughness: 0.8
     });
 
-    const width = 10 + Math.random() * 6;
-    const depth = 10 + Math.random() * 6;
-    const height = 8 + Math.random() * 18;
+    const width  = 8 + Math.random() * 4;
+    const depth  = 8 + Math.random() * 4;
+    const height = 6 + Math.random() * 10;
 
-   // 건물 본체
-const building = new THREE.Mesh(
-    new THREE.BoxGeometry(width, height, depth),
-    wallMat
-);
+    const building = new THREE.Mesh(
+        new THREE.BoxGeometry(width, height, depth),
+        wallMat
+    );
 
-building.position.set(x, groundY + height / 2, z);
-building.castShadow = true;
+    building.position.set(x, groundY + height / 2, z);
+    building.castShadow = true;
 
-// ✅ 이 두 줄이 핵심
-building.geometry.computeBoundingBox();
-building.userData.box = new THREE.Box3().setFromObject(building);
+    building.geometry.computeBoundingBox();
+    building.userData.box = new THREE.Box3().setFromObject(building);
 
-colliders.walls.push(building);
-scene.add(building);
+    colliders.walls.push(building);
+    scene.add(building);
 
-
-    // 옥상
     const roof = new THREE.Mesh(
         new THREE.PlaneGeometry(width, depth),
         floorMat
@@ -418,7 +488,6 @@ scene.add(building);
     colliders.floors.push(roof);
     scene.add(roof);
 
-    // 경사로
     createRampToRoof(x, z, width, height);
 }
 
@@ -427,6 +496,7 @@ scene.add(building);
 ================================ */
 
 function createPlaza(x, z) {
+
     const size = 18 + Math.random() * 12;
 
     const plaza = new THREE.Mesh(
@@ -438,7 +508,7 @@ function createPlaza(x, z) {
     );
 
     plaza.rotation.x = -Math.PI / 2;
-    plaza.position.set(x, groundY+0.08, z);
+    plaza.position.set(x, groundY + 0.08, z);
     plaza.receiveShadow = true;
     plaza.userData.isFloor = true;
 
@@ -447,21 +517,32 @@ function createPlaza(x, z) {
 }
 
 /* ===============================
-   도시 생성 (무한)
+   도시 생성 (맵 내부 제한)
 ================================ */
 
 function updateCity(playerX, playerZ) {
+
     const px = Math.floor(playerX / spacing);
     const pz = Math.floor(playerZ / spacing);
 
     for (let dx = -viewDistance; dx <= viewDistance; dx++) {
         for (let dz = -viewDistance; dz <= viewDistance; dz++) {
 
-            const key = `${px + dx}_${pz + dz}`;
+            const gx = px + dx;
+            const gz = pz + dz;
+
+            const key = `${gx}_${gz}`;
             if (generatedPositions.has(key)) continue;
 
-            const x = (px + dx) * spacing;
-            const z = (pz + dz) * spacing;
+            const x = gx * spacing;
+            const z = gz * spacing;
+
+            if (
+                Math.abs(x) > MAP_HALF - spacing ||
+                Math.abs(z) > MAP_HALF - spacing
+            ) {
+                continue;
+            }
 
             if (Math.random() < 0.25) {
                 createPlaza(x, z);
@@ -473,6 +554,7 @@ function updateCity(playerX, playerZ) {
         }
     }
 }
+
 
 
 
