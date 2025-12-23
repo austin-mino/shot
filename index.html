@@ -276,18 +276,30 @@ scene.fog = new THREE.FogExp2(0x87ceeb, 0.001);
 const generatedPositions = new Set(); // "x_z" -> 이미 생성된 위치 기록
 const spacing = 25; // 건물 간격
 const viewDistance = 3; // 플레이어 주변 몇 칸까지 생성
-const groundY = 18.3;
+const groundY = 18.5;
 
 // 기본 땅
-function createGround(size = 1000) {
-    const matGround = new THREE.MeshStandardMaterial({ color: 0x228B22, roughness: 0.9 });
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(size, size), matGround);
+function createGround(size = 2000) {
+    const roadMat = new THREE.MeshStandardMaterial({
+        color: 0x2b2b2b,
+        roughness: 0.95,
+        metalness: 0.05
+    });
+
+    const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(size, size),
+        roadMat
+    );
+
     ground.rotation.x = -Math.PI / 2;
     ground.position.set(0, groundY, 0);
+    ground.receiveShadow = true;
+
     ground.userData.isFloor = true;
     colliders.floors.push(ground);
     scene.add(ground);
 }
+
 createGround();
 
 // 건물 생성
@@ -323,21 +335,35 @@ function createBuilding(x, z) {
     colliders.floors.push(roof);
 
     // 경사로
-    if (Math.random() < 0.5) {
-        const rampLength = 6 + Math.random() * 4;
-        const ramp = new THREE.Mesh(
-            new THREE.PlaneGeometry(rampLength, width),
-            new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 0.3 })
-        );
-        ramp.rotation.x = -Math.atan2(height, rampLength);
-        ramp.position.set(x + width / 2 + rampLength / 2, groundY + height / 2, z);
-        ramp.userData.isFloor = true;
-        colliders.floors.push(ramp);
-        scene.add(ramp);
-    }
+   if (Math.random() < 0.5) {
+    const rampLength = 8 + Math.random() * 4;
+    const rampHeight = height;
 
-    scene.add(floor, building, roof);
+    const rampAngle = Math.atan2(rampHeight, rampLength);
+
+    const ramp = new THREE.Mesh(
+        new THREE.PlaneGeometry(rampLength, width),
+        new THREE.MeshStandardMaterial({
+            color: 0x777777,
+            roughness: 0.4
+        })
+    );
+
+    ramp.rotation.x = -rampAngle;
+
+    // 바닥에서 시작해서 옥상에 정확히 닿게 배치
+    ramp.position.set(
+        x + width / 2 + rampLength / 2,
+        groundY + rampHeight / 2,
+        z
+    );
+
+    ramp.receiveShadow = true;
+    ramp.userData.isFloor = true;
+    colliders.floors.push(ramp);
+    scene.add(ramp);
 }
+
 
 // 광장 생성
 function createPlaza(x, z) {
