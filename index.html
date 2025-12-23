@@ -461,7 +461,12 @@ function updateCity(playerX, playerZ) {
     spawnPlayerSafely(player);
     updateGround(player);          // ⭐ 바닥에 딱 붙임
 
+  // ✅ 적 생성 & 안전 스폰
+    const enemy = createEnemy();
+    scene.add(enemy);
+    spawnEnemySafely(enemy, player.position);
 
+            
             document.body.requestPointerLock(); 
             startScreen.style.display = 'none';
         });
@@ -838,6 +843,57 @@ function spawnPlayerSafely(player, maxTries = 30) {
     return false;
 }
 
+        function spawnEnemySafely(enemy, center, maxTries = 40) {
+    const raycaster = new THREE.Raycaster();
+    const spawnRadius = 60;
+    const enemyRadius = 1.2;   // 플레이어보다 조금 크게
+    const minWallDistance = 1.5;
+
+    for (let i = 0; i < maxTries; i++) {
+
+        // 1️⃣ 중심점 기준 랜덤 XZ
+        const x = center.x + (Math.random() - 0.5) * spawnRadius;
+        const z = center.z + (Math.random() - 0.5) * spawnRadius;
+
+        // 2️⃣ 위에서 아래로 바닥 탐색
+        raycaster.set(
+            new THREE.Vector3(x, groundY + 120, z),
+            new THREE.Vector3(0, -1, 0)
+        );
+
+        const hits = raycaster.intersectObjects(colliders.floors, false);
+        if (hits.length === 0) continue;
+
+        const floorObj = hits[0].object;
+
+        // ❌ 옥상 스폰 금지 (선택)
+        if (floorObj.userData.isRoof) continue;
+
+        const y = hits[0].point.y;
+        const candidate = new THREE.Vector3(x, y + 1.8, z);
+
+        // 3️⃣ 벽과 거리 검사
+        let blocked = false;
+        for (const wall of colliders.walls) {
+            const box = new THREE.Box3().setFromObject(wall);
+            if (box.distanceToPoint(candidate) < minWallDistance) {
+                blocked = true;
+                break;
+            }
+        }
+        if (blocked) continue;
+
+        // 4️⃣ 성공
+        enemy.position.copy(candidate);
+        enemy.userData.velocity.y = 0;
+        return true;
+    }
+
+    console.warn("적 안전 스폰 실패");
+    return false;
+}
+
+
         
     function animate() {
     requestAnimationFrame(animate);
@@ -975,7 +1031,7 @@ updateGround(player);
 
     // 9. 적/보스 스폰 & AI
     if(state.score>=state.nextBossScore && !state.bossSpawned){ spawnBoss(); state.nextBossScore+=5000; }
-    if(!boss && state.enemies.length<15 && Math.random()<0.03) {
+    if(!boss && state.enemies.length<35 && Math.random()<0.03) {
         const e=createDetailedHumanoid(0xff4444,false);
         const a=Math.random()*6.28, r=30+Math.random()*20;
         e.position.set(player.position.x+Math.cos(a)*r,20,player.position.z+Math.sin(a)*r);
