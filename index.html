@@ -457,7 +457,7 @@ function updateCity(playerX, playerZ) {
             state.isGameActive = true; 
     player.userData.velocity.y = 0;   // 🔒 중력 리셋
      // ✅ [여기 추가]
-   updateCity(playerX, playerZ);
+   updateCity(player.position.x, player.position.z);
     spawnPlayerSafely(player);
     updateGround(player);          // ⭐ 바닥에 딱 붙임
 
@@ -466,13 +466,14 @@ function updateCity(playerX, playerZ) {
             startScreen.style.display = 'none';
         });
 
-        document.addEventListener('pointerlockchange', () => {
-            if (document.pointerLockElement === document.body) {
-                state.isGameActive = true; startScreen.style.display = 'none';
-            } else if (!state.isGameOver) {
-                startScreen.style.display = 'flex';
-            }
-        });
+       document.addEventListener('pointerlockchange', () => {
+    if (!state.isGameActive) return;
+
+    if (document.pointerLockElement === document.body) {
+        startScreen.style.display = 'none';
+    }
+});
+
 
         // [핵심] 카메라 회전 (구면 좌표계: Theta-가로, Phi-세로)
         document.addEventListener('mousemove', (e) => {
