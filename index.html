@@ -402,32 +402,29 @@ createMapBoundaryWalls();
    경사로
 ================================ */
 
-function createRampToRoof(buildingX, buildingZ, buildingWidth, buildingDepth, height, depth = 2) {
-    const rampWidth = buildingWidth * 0.8;           // 건물 폭보다 약간 좁게
-    const horizontal = buildingDepth;                // 경사로 수평 길이 (건물 앞쪽)
+function createRampToRoof(buildingX, buildingZ, buildingWidth, buildingDepth, height, thickness = 0.5) {
+    const rampWidth = buildingWidth * 0.3;   // 폭을 좁게, 양 옆은 얇게
+    const horizontal = buildingDepth;        // 경사로 수평 길이
     const rampLength = Math.sqrt(horizontal * horizontal + height * height);
     const angle = Math.atan2(height, horizontal);
 
-    // BoxGeometry 생성
-    const geometry = new THREE.BoxGeometry(rampWidth, depth, rampLength);
+    const geometry = new THREE.BoxGeometry(rampWidth, thickness, rampLength);
     const material = new THREE.MeshStandardMaterial({
         color: 0x777777,
         roughness: 0.5
     });
     const ramp = new THREE.Mesh(geometry, material);
 
-    // 경사 회전: Z축을 기준으로 건물 앞쪽으로 기울이기
+    // 경사 회전
     ramp.rotation.x = -angle;
-    ramp.rotation.y = 0;
 
-    // 위치 계산: 건물 앞쪽으로 배치하고, 높이는 중앙 기준
-    const startX = buildingX;                        // 건물 중앙 X
-    const startY = groundY + height / 2;            // 지면에서 중앙 높이
-    const startZ = buildingZ + buildingDepth / 2 + rampLength / 2 * Math.cos(angle); // 건물 앞쪽
+    // 위치: 건물 앞쪽 중앙 기준, 높이는 중앙 기준
+    const posX = buildingX;  // 중앙에 배치
+    const posY = groundY + (height / 2) + (rampLength / 2) * Math.sin(angle);
+    const posZ = buildingZ + buildingDepth / 2 + (rampLength / 2) * Math.cos(angle);
 
-    ramp.position.set(startX, startY, startZ);
+    ramp.position.set(posX, posY, posZ);
 
-    // 그림자와 충돌 처리
     ramp.receiveShadow = true;
     ramp.castShadow = true;
     ramp.userData.isFloor = true;
@@ -435,6 +432,7 @@ function createRampToRoof(buildingX, buildingZ, buildingWidth, buildingDepth, he
     colliders.floors.push(ramp);
     scene.add(ramp);
 }
+
 
 
 
