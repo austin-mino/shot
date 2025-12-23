@@ -402,36 +402,40 @@ createMapBoundaryWalls();
    경사로
 ================================ */
 
-function createRampToRoof(x, z, width, height, depth = 1.2) {
-    const rampWidth = 1.35; // 좌우 폭
-    const horizontal = width;
-    const rampLength = Math.sqrt(height * height + horizontal * horizontal);
+function createRampToRoof(buildingX, buildingZ, buildingWidth, buildingDepth, height, depth = 1.2) {
+    const rampWidth = 1.35;              // 좌우 폭
+    const horizontal = buildingWidth;     // 경사로 수평 길이
+    const rampLength = Math.sqrt(horizontal * horizontal + height * height);
     const angle = Math.atan2(height, horizontal);
 
-    // BoxGeometry 생성 (Plane보다 두께가 있음)
+    // BoxGeometry 생성 (두께 포함)
     const geometry = new THREE.BoxGeometry(rampLength, depth, rampWidth);
+    const material = new THREE.MeshStandardMaterial({
+        color: 0x777777,
+        roughness: 0.5
+    });
+    const ramp = new THREE.Mesh(geometry, material);
 
-    const ramp = new THREE.Mesh(
-        geometry,
-        new THREE.MeshStandardMaterial({
-            color: 0x777777,
-            roughness: 0.5
-        })
-    );
+    // 회전
+    ramp.rotation.y = Math.PI / 2;  // 좌우 방향
+    ramp.rotation.x = -angle;       // 경사 방향
 
-    ramp.rotation.y = Math.PI / 2;  // 기존 Plane과 동일
-    ramp.rotation.x = -angle;
+    // 시작점 보정: 건물 밖으로 나오게
+    // BoxGeometry 중심이 중앙이므로 반 길이만큼 이동
+    const offsetX = rampLength / 2 * Math.cos(angle);
+    const offsetY = rampLength / 2 * Math.sin(angle) + depth / 2;
+    const startX = buildingX + buildingWidth + offsetX;       // 건물 우측 끝 기준
+    const startY = groundY + offsetY;                        // 땅 기준 높이
+    const startZ = buildingZ + buildingDepth / 2;            // 건물 중심 Z
 
-    // BoxGeometry는 중심이 중간이므로 높이 위치 조정
-    ramp.position.set(
-        x + width / 2 + 0.01,
-        groundY + height / 2 + depth / 2,  // 두께 반만큼 올려줌
-        z
-    );
+    ramp.position.set(startX, startY, startZ);
 
+    // 그림자와 충돌 처리
     ramp.receiveShadow = true;
+    ramp.castShadow = true;
     ramp.userData.isFloor = true;
 
+    // 실제 밟을 수 있는 collider로 등록
     colliders.floors.push(ramp);
     scene.add(ramp);
 }
@@ -481,7 +485,7 @@ function createBuilding(x, z) {
     );
 
     roof.rotation.x = -Math.PI / 2;
-    roof.position.set(x, groundY + height, z);
+    roof.position.set(x, groundY + height + 0.08, z);
     roof.receiveShadow = true;
     roof.userData.isFloor = true;
 
@@ -1202,15 +1206,22 @@ updateGround(player);
     if(state.score>=state.nextBossScore && !state.bossSpawned){ spawnBoss(); state.nextBossScore+=5000; }
    if (!boss && state.enemies.length < 35 && Math.random() < 0.03) {
     const e = createDetailedHumanoid(0xff4444, false);
-       e.userData.boxSize = new THREE.Vector3(0.8, 1.8, 0.8);
+e.userData.boxSize = new THREE.Vector3(0.8, 1.8, 0.8);
 
-    scene.add(e);
+// 랜덤으로 Gunner 결정 (예: 30% 확률)
+e.userData.isGunner = Math.random() < 0.3;
+if (e.userData.isGunner) {
+    e.userData.shootCooldown = 2.0; // 초기 쿨타임
+}
 
-    if (spawnEnemySafely(e, player.position)) {
-        state.enemies.push(e);
-    } else {
-        scene.remove(e); // 실패 시 제거
-    }
+scene.add(e);
+
+if (spawnEnemySafely(e, player.position)) {
+    state.enemies.push(e);
+} else {
+    scene.remove(e);
+}
+
 }
 
 
