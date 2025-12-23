@@ -869,13 +869,7 @@ function spawnPlayerSafely(player, maxTries = 30) {
 
         const floorObj = hits[0].object;
 
-        // ❌ 옥상 스폰 금지 (선택)
-        roof.userData.isFloor = true;
-roof.userData.isRoof = true; // 🔑 추가
-
-
-        const y = hits[0].point.y;
-        const candidate = new THREE.Vector3(x, y + 1.8, z);
+     
 
         // 3️⃣ 벽과 거리 검사
         let blocked = false;
