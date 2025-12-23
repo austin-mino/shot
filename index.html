@@ -243,8 +243,7 @@ scene.add(fillLight);
         }
 
         const player = createDetailedHumanoid(0x0088ff, true);
-        player.position.set(5, 24, 0); // 🔥 footHeight보다 높게
-player.userData.velocity.y = 0; // 🔒 초기 낙하 차단
+    
 
         scene.add(player);
 function box(w, h, d, x, y, z) {
@@ -457,7 +456,10 @@ function updateCity(playerX, playerZ) {
             
             state.isGameActive = true; 
     player.userData.velocity.y = 0;   // 🔒 중력 리셋
-    updateGround(player);             // ⭐ 바닥에 딱 붙임
+     // ✅ [여기 추가]
+   updateCity(playerX, playerZ);
+    spawnPlayerSafely(player);
+    updateGround(player);          // ⭐ 바닥에 딱 붙임
 
 
             document.body.requestPointerLock(); 
@@ -786,6 +788,56 @@ updateGround(boss);
             }
         }
 
+
+
+function spawnPlayerSafely(player, maxTries = 30) {
+    const raycaster = new THREE.Raycaster();
+    const spawnRadius = 40;
+    const playerRadius = 1;
+
+    for (let i = 0; i < maxTries; i++) {
+
+        // 1️⃣ 랜덤 XZ
+        const x = (Math.random() - 0.5) * spawnRadius;
+        const z = (Math.random() - 0.5) * spawnRadius;
+
+        // 2️⃣ 위에서 아래로 레이
+        raycaster.set(
+            new THREE.Vector3(x, groundY + 100, z),
+            new THREE.Vector3(0, -1, 0)
+        );
+
+        const hits = raycaster.intersectObjects(colliders.floors, false);
+        if (hits.length === 0) continue;
+
+        const y = hits[0].point.y;
+
+        // 3️⃣ 임시 위치
+        const candidate = new THREE.Vector3(x, y + 2, z);
+
+        // 4️⃣ 벽 충돌 검사 (Sphere vs Box)
+        let blocked = false;
+        for (const wall of colliders.walls) {
+            const box = new THREE.Box3().setFromObject(wall);
+            if (box.distanceToPoint(candidate) < playerRadius) {
+                blocked = true;
+                break;
+            }
+        }
+
+        if (blocked) continue;
+
+        // 5️⃣ 성공
+        player.position.copy(candidate);
+        player.userData.velocity.y = 0;
+        return true;
+    }
+
+    console.warn("안전한 스폰 위치를 찾지 못함");
+    return false;
+}
+
+        
     function animate() {
     requestAnimationFrame(animate);
 
