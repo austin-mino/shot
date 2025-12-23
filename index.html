@@ -869,7 +869,8 @@ function spawnPlayerSafely(player, maxTries = 30) {
 
         const floorObj = hits[0].object;
 
-     
+     const candidate = new THREE.Vector3(x, y + 2, z);
+
 
         // 3️⃣ 벽과 거리 검사
         let blocked = false;
