@@ -452,31 +452,24 @@ function updateCity(playerX, playerZ) {
         const startScreen = document.getElementById('start-screen');
         
         // 게임 시작
-        startScreen.addEventListener('click', () => { 
-            
-            state.isGameActive = true; 
-    player.userData.velocity.y = 0;   // 🔒 중력 리셋
-     // ✅ [여기 추가]
-   updateCity(player.position.x, player.position.z);
-    spawnPlayerSafely(player);
-    updateGround(player);          // ⭐ 바닥에 딱 붙임
+       startScreen.addEventListener('click', () => { 
+    state.isGameActive = true;
 
-  // ✅ 적 생성 & 안전 스폰
-    const enemy = createEnemy();
+    player.userData.velocity.y = 0;
+
+    updateCity(player.position.x, player.position.z);
+    spawnPlayerSafely(player);
+    updateGround(player);
+
+    const enemy = createDetailedHumanoid(0xff4444, false);
     scene.add(enemy);
     spawnEnemySafely(enemy, player.position);
 
-            
-            document.body.requestPointerLock(); 
-            startScreen.style.display = 'none';
-        });
+    // ✅ 여기서 즉시 제거 (핵심)
+    startScreen.style.display = 'none';
 
-       document.addEventListener('pointerlockchange', () => {
-    if (!state.isGameActive) return;
-
-    if (document.pointerLockElement === document.body) {
-        startScreen.style.display = 'none';
-    }
+    // 포인터락은 시도만
+    document.body.requestPointerLock();
 });
 
 
