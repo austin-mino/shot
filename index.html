@@ -868,7 +868,7 @@ function spawnPlayerSafely(player, maxTries = 30) {
         if (hits.length === 0) continue;
 
         const floorObj = hits[0].object;
-
+ const y = hits[0].point.y;
      const candidate = new THREE.Vector3(x, y + 2, z);
 
 
