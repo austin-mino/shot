@@ -401,42 +401,41 @@ createMapBoundaryWalls();
 /* ===============================
    경사로
 ================================ */
+function createRampToRoof(bx, bz, bWidth, bDepth, bHeight) {
+    const rampLen = bHeight * 2; // 경사로 길이 (완만하게)
+    const rampWidth = 4;
+    
+    const rampGeo = new THREE.BoxGeometry(rampWidth, 0.5, rampLen);
+    const rampMat = new THREE.MeshStandardMaterial({ color: 0x555555 });
+    
+    const ramp = new THREE.Mesh(rampGeo, rampMat);
+    
+    // 건물의 앞쪽(Z축 양의 방향)에 경사로 배치
+    // 삼각함수로 높이와 길이에 맞는 각도 계산
+    const angle = Math.asin(bHeight / rampLen); 
+    
+    // 위치 잡기: 건물 끝에서 시작
+    const startZ = bz + bDepth / 2;
+    // 경사로의 중심 위치 계산
+    const rampZ = startZ + (rampLen / 2) * Math.cos(angle) * 0.9; 
+    const rampY = groundY + bHeight / 2;
 
-function createRampToRoof(buildingX, buildingZ, buildingWidth, buildingDepth, height, thickness = 0.5) {
-    const rampWidth = buildingWidth * 0.3;   // 폭을 좁게, 양 옆은 얇게
-    const horizontal = buildingDepth;        // 경사로 수평 길이
-    const rampLength = Math.sqrt(horizontal * horizontal + height * height);
-    const angle = Math.atan2(height, horizontal);
+    ramp.position.set(bx, rampY, rampZ);
+    ramp.rotation.x = -angle; // 경사 기울기
 
-    const geometry = new THREE.BoxGeometry(rampWidth, thickness, rampLength);
-    const material = new THREE.MeshStandardMaterial({
-        color: 0x777777,
-        roughness: 0.5
-    });
-    const ramp = new THREE.Mesh(geometry, material);
-
-    // 경사 회전
-    ramp.rotation.x = -angle;
-
-    // 위치: 건물 앞쪽 중앙 기준, 높이는 중앙 기준
-    const posX = buildingX;  // 중앙에 배치
-    const posY = groundY + (height / 2) + (rampLength / 2) * Math.sin(angle);
-    const posZ = buildingZ + buildingDepth / 2 + (rampLength / 2) * Math.cos(angle);
-
-    ramp.position.set(posX, posY, posZ);
-
-    ramp.receiveShadow = true;
     ramp.castShadow = true;
-    ramp.userData.isFloor = true;
-
+    ramp.receiveShadow = true;
+    
+    // ✅ 경사로도 밟을 수 있게 충돌체 추가
+    ramp.updateMatrixWorld(); // 회전 적용 확정
+    ramp.geometry.computeBoundingBox();
+    ramp.userData.box = new THREE.Box3().setFromObject(ramp);
+    
     colliders.floors.push(ramp);
     scene.add(ramp);
 }
 
-
-
-
-
+        
 /* ===============================
    건물
 ================================ */
@@ -469,6 +468,7 @@ function createBuilding(x, z) {
     building.position.set(x, groundY + height / 2, z);
     building.castShadow = true;
 
+    // 벽 충돌 박스
     building.geometry.computeBoundingBox();
     building.userData.box = new THREE.Box3().setFromObject(building);
 
@@ -487,12 +487,15 @@ function createBuilding(x, z) {
     roof.castShadow = true;
     roof.userData.isFloor = true;
 
+    // ✅ [수정됨] 옥상을 밟기 위해 충돌 박스 데이터 추가
+    roof.geometry.computeBoundingBox();
+    roof.userData.box = new THREE.Box3().setFromObject(roof);
+
     colliders.floors.push(roof);
     scene.add(roof);
 
     createRampToRoof(x, z, width, depth, height);
 }
-
 
 /* ===============================
    광장
