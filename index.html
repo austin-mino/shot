@@ -364,17 +364,22 @@ function createBuilding(x, z) {
     const depth = 10 + Math.random() * 6;
     const height = 8 + Math.random() * 18;
 
-    // 건물 본체
-    const building = new THREE.Mesh(
-        new THREE.BoxGeometry(width, height, depth),
-        wallMat
-    );
+   // 건물 본체
+const building = new THREE.Mesh(
+    new THREE.BoxGeometry(width, height, depth),
+    wallMat
+);
 
-    building.position.set(x, groundY + height / 2, z);
-    building.castShadow = true;
+building.position.set(x, groundY + height / 2, z);
+building.castShadow = true;
 
-    colliders.walls.push(building);
-    scene.add(building);
+// ✅ 이 두 줄이 핵심
+building.geometry.computeBoundingBox();
+building.userData.box = new THREE.Box3().setFromObject(building);
+
+colliders.walls.push(building);
+scene.add(building);
+
 
     // 옥상
     const roof = new THREE.Mesh(
@@ -816,13 +821,18 @@ function spawnPlayerSafely(player, maxTries = 30) {
 
         // 4️⃣ 벽 충돌 검사 (Sphere vs Box)
         let blocked = false;
-        for (const wall of colliders.walls) {
-            const box = new THREE.Box3().setFromObject(wall);
-            if (box.distanceToPoint(candidate) < playerRadius) {
-                blocked = true;
-                break;
-            }
-        }
+       for (const wall of colliders.walls) {
+    if (!wall.userData.box) continue;
+
+    wall.userData.box.copy(wall.geometry.boundingBox)
+        .applyMatrix4(wall.matrixWorld);
+
+    if (wall.userData.box.distanceToPoint(candidate) < playerRadius) {
+        blocked = true;
+        break;
+    }
+}
+
 
         if (blocked) continue;
 
@@ -840,7 +850,7 @@ function spawnPlayerSafely(player, maxTries = 30) {
     const raycaster = new THREE.Raycaster();
     const spawnRadius = 60;
     const enemyRadius = 1.2;   // 플레이어보다 조금 크게
-    const minWallDistance = 1.5;
+    const minWallDistance = 2.2;
 
     for (let i = 0; i < maxTries; i++) {
 
@@ -860,20 +870,28 @@ function spawnPlayerSafely(player, maxTries = 30) {
         const floorObj = hits[0].object;
 
         // ❌ 옥상 스폰 금지 (선택)
-        if (floorObj.userData.isRoof) continue;
+        roof.userData.isFloor = true;
+roof.userData.isRoof = true; // 🔑 추가
+
 
         const y = hits[0].point.y;
         const candidate = new THREE.Vector3(x, y + 1.8, z);
 
         // 3️⃣ 벽과 거리 검사
         let blocked = false;
-        for (const wall of colliders.walls) {
-            const box = new THREE.Box3().setFromObject(wall);
-            if (box.distanceToPoint(candidate) < minWallDistance) {
-                blocked = true;
-                break;
-            }
-        }
+       for (const wall of colliders.walls) {
+    if (!wall.userData.box) continue;
+
+    wall.userData.box.copy(wall.geometry.boundingBox)
+        .applyMatrix4(wall.matrixWorld);
+
+    if (wall.userData.box.distanceToPoint(candidate) < minWallDistance) {
+        blocked = true;
+        break;
+    }
+}
+
+
         if (blocked) continue;
 
         // 4️⃣ 성공
@@ -901,7 +919,7 @@ function spawnPlayerSafely(player, maxTries = 30) {
    // 플레이어 위치에 따라 주변 도시 생성
     const playerX = camera.position.x;
     const playerZ = camera.position.z;
-    updateCity(playerX, playerZ);
+    updateCity(player.position.x, player.position.z);
     if (!player.userData.isGrounded) updateGround(player);
 
     // 3. 플레이어 총알 연사
@@ -1024,17 +1042,17 @@ updateGround(player);
 
     // 9. 적/보스 스폰 & AI
     if(state.score>=state.nextBossScore && !state.bossSpawned){ spawnBoss(); state.nextBossScore+=5000; }
-    if(!boss && state.enemies.length<35 && Math.random()<0.03) {
-        const e=createDetailedHumanoid(0xff4444,false);
-        const a=Math.random()*6.28, r=30+Math.random()*20;
-        e.position.set(player.position.x+Math.cos(a)*r,20,player.position.z+Math.sin(a)*r);
-        e.userData.velocity.y=0; updateGround(e);
-        if(state.gunnerCount<3){
-            e.userData.isGunner=true; e.userData.shootCooldown=Math.random()*1.5; state.gunnerCount++;
-            e.traverse(obj=>{if(obj.isMesh&&obj.material){obj.material=obj.material.clone(); obj.material.color.set(0xffaa00);}});
-        }
-        scene.add(e); state.enemies.push(e);
+   if (!boss && state.enemies.length < 35 && Math.random() < 0.03) {
+    const e = createDetailedHumanoid(0xff4444, false);
+    scene.add(e);
+
+    if (spawnEnemySafely(e, player.position)) {
+        state.enemies.push(e);
+    } else {
+        scene.remove(e); // 실패 시 제거
     }
+}
+
 
     const allEnemies = [...state.enemies]; if(boss) allEnemies.push(boss);
     allEnemies.forEach(e=>{
