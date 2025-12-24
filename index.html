@@ -658,7 +658,10 @@ function createBuilding(x, z) {
     createRampToRoof(building, width, depth, height);
 
     // 6. 주변 잔해 (사이버펑크 폐허 느낌으로 개수 소량 유지)
-    createDebris(x, z, width + 4, Math.floor(Math.random() * 2) + 1);
+   const debrisCount = Math.random() < 0.5 ? 3 : 2;
+    if (debrisCount > 0) {
+        createDebris(x, z, width + 4, debrisCount);
+    }
 }
 
 // 2. 경사로 (수정: 벡터 연결 방식 + 원래 함수 이름)
@@ -756,7 +759,7 @@ function createRuinsField(x, z) {
         roughness: 0.9
     });
     
-    if (Math.random() > 0.4) {
+    if (Math.random() > 0.6) {
         const platform = new THREE.Mesh(
             new THREE.BoxGeometry(size * 0.7, 0.5, size * 0.7),
             baseMat
@@ -777,7 +780,7 @@ function createRuinsField(x, z) {
 
     // [수정] 잔해 개수 대폭 감소 (25 -> 8개)
     // 너무 많으면 이동에 방해됨
-    createDebris(x, z, size * 0.6, 8);
+    createDebris(x, z, size * 0.6, 4);
 }
 
 /* ===============================
