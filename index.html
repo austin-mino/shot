@@ -30,6 +30,7 @@
         }
         #hp-bar { color: #ff4444; border-bottom: 3px solid #ff4444; }
         #score-bar { color: #44ff44; border-bottom: 3px solid #44ff44; }
+        
 
         #boss-ui {
             display: none; position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
@@ -74,7 +75,12 @@
             <div class="stat-box" id="hp-bar">HP: 100</div>
             <div class="stat-box" id="score-bar">SCORE: 0</div>
         </div>
-        
+        <div id="ammo-ui" style="position: absolute; bottom: 50px; right: 50px; color: #00ff00; font-size: 32px; font-weight: bold; text-shadow: 0 0 5px #000;">
+    30 / ∞
+</div>
+<div id="reload-msg" style="position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%); color: #ff3333; font-size: 24px; font-weight: bold; display: none;">
+    RELOADING...
+</div>
         <div id="boss-msg">⚠ WARNING: BOSS DETECTED ⚠</div>
         <div id="boss-ui"><div id="boss-hp-fill"></div><div id="boss-phase"
      style="position:absolute; width:100%; text-align:center;
@@ -136,11 +142,40 @@
 cameraMode: 'TPS', 
             // 구면 좌표계 사용 (phi: 수직, theta: 수평)
             cam: { theta: Math.PI, phi: 1.4, radius: 4.5 } 
+            ammo: 30,          // 현재 탄창에 남은 총알
+    maxAmmo: 30,       // 탄창 용량
+    isReloading: false, // 재장전 중인지 여부
         };
 
         const input = { w: false, a: false, s: false, d: false, space: false, joyX: 0, joyY: 0 };
         const physics = { gravity: -0.018, jump: 0.45 };
+        function reloadWeapon() {
+    // 이미 재장전 중이거나, 총알이 꽉 차있으면 무시
+    if (state.isReloading || state.ammo === state.maxAmmo) return;
 
+    state.isReloading = true;
+    
+    // UI 업데이트 (재장전 중 표시)
+    document.getElementById('reload-msg').style.display = 'block';
+    document.getElementById('ammo-ui').innerText = "RELOADING...";
+    document.getElementById('ammo-ui').style.color = "#ff3333"; // 빨간색 경고
+
+    // 1.5초 후 재장전 완료
+    setTimeout(() => {
+        state.ammo = state.maxAmmo;
+        state.isReloading = false;
+
+        // UI 복구
+        document.getElementById('reload-msg').style.display = 'none';
+        updateAmmoUI(); 
+    }, 1500); // 1.5초 걸림 (원하는 시간으로 조절 가능)
+}
+
+function updateAmmoUI() {
+    const el = document.getElementById('ammo-ui');
+    el.innerText = `${state.ammo} / ∞`;
+    el.style.color = state.ammo <= 5 ? "#ff3333" : "#00ff00"; // 5발 이하면 빨간색
+}
 
         // --- 2. 씬 & 렌더러 ---
         const scene = new THREE.Scene();
@@ -788,6 +823,7 @@ window.addEventListener('keyup', e => {
             const k = e.key.toLowerCase(); if (input.hasOwnProperty(k)) input[k] = true;
             if (e.code === 'Space') input.space = true;
             if (k === 'p') toggleCameraMode();
+            if (e.code === 'KeyG') reloadWeapon(); // G키 누르면 재장전
         });
         window.addEventListener('keyup', e => {
             const k = e.key.toLowerCase(); if (input.hasOwnProperty(k)) input[k] = false;
@@ -1421,12 +1457,14 @@ function moveEnemyLikePlayer(enemy, targetPos, speed) {
     updateCity(player.position.x, player.position.z);
     if (!player.userData.isGrounded) updateGround(player);
 
-   // 3. 플레이어 총알 연사 (경사로/벽 막힘 완벽 해결)
-    if (isFiring && fireCooldown <= 0) { 
+  // 3. 플레이어 총알 연사 (탄약 시스템 적용)
+    // [조건 추가] 재장전 중이 아니고(!state.isReloading), 총알이 있어야 함(state.ammo > 0)
+    if (isFiring && fireCooldown <= 0 && !state.isReloading && state.ammo > 0) { 
+        
+        // --- (기존 레이캐스팅 조준 로직 시작) ---
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
 
-        // 조준 대상: 벽, 바닥, 적, 보스
         const targetObjects = [...colliders.walls, ...colliders.floors];
         state.enemies.forEach(e => targetObjects.push(e));
         if(boss) targetObjects.push(boss);
@@ -1440,47 +1478,49 @@ function moveEnemyLikePlayer(enemy, targetPos, speed) {
             targetPoint = raycaster.ray.origin.clone().add(raycaster.ray.direction.multiplyScalar(100));
         }
 
-        // (1) 우선 어깨 견착 위치(Shoulder) 계산
         let spawnPos = camera.position.clone();
         
         if (!isMobile) { 
              const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
              const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
              const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
-             
-             // 오른쪽 아래로 살짝 내림
              spawnPos.add(right.multiplyScalar(0.4)).add(up.multiplyScalar(-0.2)).add(forward.multiplyScalar(0.5));
         } else {
              spawnPos.copy(player.position).add(new THREE.Vector3(0, 1.5, 0));
         }
 
-        // (2) [핵심 수정] "총구가 안전한가?" 검사 (Safety Check)
-        // 카메라(눈)에서 총구(어깨) 사이에 벽이나 경사로가 끼어있는지 확인합니다.
         const camToSpawn = new THREE.Vector3().subVectors(spawnPos, camera.position);
         const distToSpawn = camToSpawn.length();
         const safetyRay = new THREE.Raycaster(camera.position, camToSpawn.normalize());
-        
-        // 벽과 바닥(경사로) 모두 검사
         const safetyHits = safetyRay.intersectObjects([...colliders.walls, ...colliders.floors], false);
 
-        // 조건 1: 어깨 위치가 벽/경사로 속에 파묻힘 (safetyHits 발생)
-        // 조건 2: 조준점이 너무 가까움 (hits[0].distance < 2.5) -> 벽에 붙어서 쏠 때
         if ((safetyHits.length > 0 && safetyHits[0].distance < distToSpawn) || 
             (hits.length > 0 && hits[0].distance < 2.5)) {
-            
-            // 문제 발생 시: 카메라 위치(눈)에서 바로 발사
             const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
             spawnPos.copy(camera.position).add(forward.multiplyScalar(0.5)); 
         }
 
-        // (3) 발사
         const fireDir = new THREE.Vector3().subVectors(targetPoint, spawnPos).normalize();
         fireBullet(false, spawnPos, fireDir, 2.5);
+        // --- (기존 조준 로직 끝) ---
+
+        // [탄약 감소 로직]
+        state.ammo--; // 총알 1발 감소
+        updateAmmoUI(); // UI 갱신
+
+        // [자동 재장전] 총알을 다 썼으면
+        if (state.ammo <= 0) {
+            reloadWeapon();
+        }
 
         fireCooldown = 6; 
     }
     
+    // 재장전 중에도 발사 버튼을 누르고 있으면 쿨타임은 돌지 않게 하거나, 
+    // 그냥 둬도 isReloading 체크 때문에 발사는 안됨.
     if (fireCooldown > 0) fireCooldown--;
+
+        
     // 4. 카메라 업데이트
     const targetPos = player.position.clone().add(new THREE.Vector3(0, 1.6, 0));
     if (!isMobile) {
