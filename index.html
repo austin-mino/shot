@@ -139,11 +139,9 @@ cameraMode: 'TPS',
         };
 
         const input = { w: false, a: false, s: false, d: false, space: false, joyX: 0, joyY: 0 };
-// 수정된 물리 값 (1 unit = 1m 스케일용)
-const physics = { 
-    gravity: -0.035, // 기존 -0.018보다 2배 정도 무겁게
-    jump: 0.65       // 경사로(2m)를 여유롭게 넘음
-};
+        const physics = { gravity: -0.018, jump: 0.45 };
+
+
         // --- 2. 씬 & 렌더러 ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x1b2a4a);
@@ -487,123 +485,106 @@ function createBuilding(x, z) {
     createDebris(x, z, width + 4, Math.floor(Math.random() * 2) + 1);
 }
 
-// 2. 경사로 (수정: 꽉 찬 쐐기형 블록 생성)
+// 2. 경사로 (수정: 박스 회전 방식 - 표면 높이 정밀 보정)
 function createRampToRoof(buildingMesh, bWidth, bDepth, bHeight) {
     const rampWidth = 3.0; // 경사로 폭
-    
-    // 경사로 길이 (완만하게 설정: 높이의 2.2배)
-    const rampLength = bHeight * 2.2; 
+    const rampThickness = 2.0; // 두께 (물리 뚫림 방지용)
 
-    // 1️⃣ 쐐기(Wedge) 모양 생성 (Triangle shape extrusion)
-    // (0,0)에서 시작해서 삼각형을 그립니다.
-    const shape = new THREE.Shape();
-    shape.moveTo(0, 0);                 // 바닥 끝점 (뾰족한 부분)
-    shape.lineTo(rampLength, 0);        // 바닥 안쪽 (건물 벽 쪽 바닥)
-    shape.lineTo(rampLength, bHeight);  // 벽 타고 올라간 높이 (옥상 연결부)
-    shape.lineTo(0, 0);                 // 다시 시작점으로 닫기
+    // [설정] 경사를 얼마나 완만하게 할 것인가 (높이의 2.2배 거리)
+    // 이 값이 클수록 경사가 완만해져서 걷기 편합니다.
+    const run = bHeight * 2.2; 
+    const rise = bHeight;
+    
+    // 피타고라스로 빗변(실제 경사로 길이) 계산
+    // 양 끝을 조금 더 길게(+1.0) 해서 건물/바닥 속으로 파묻히게 함 (틈새 방지)
+    const overlap = 1.0; 
+    const rampLen = Math.sqrt(run * run + rise * rise) + overlap;
 
-    // 2️⃣ 두께 만들기 (Extrude)
-    const extrudeSettings = {
-        steps: 1,
-        depth: rampWidth, // 경사로 폭만큼 튀어나오게 함
-        bevelEnabled: false // 모서리 둥글게 하지 않음 (칼각 유지)
-    };
-    
-    const rampGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
-    
-    // 재질 설정
+    // 경사 각도 계산 (라디안)
+    const angle = Math.atan2(rise, run);
+
+    // 지오메트리 & 재질
+    const rampGeo = new THREE.BoxGeometry(rampWidth, rampThickness, rampLen);
     const rampMat = new THREE.MeshStandardMaterial({ 
         color: 0x444444, 
-        roughness: 0.9,
-        metalness: 0.5
+        roughness: 0.9, 
+        metalness: 0.5,
+        side: THREE.DoubleSide // 양면 렌더링 (시각적 뚫림 방지)
     });
-    
     const ramp = new THREE.Mesh(rampGeo, rampMat);
 
-    // 3️⃣ 위치 및 회전 잡기
-    // ExtrudeGeometry는 기본적으로 Z축으로 두께가 생기고, XY평면에 모양이 생김.
-    // 이를 각 면(동서남북)에 맞춰서 돌리고 이동시켜야 함.
-
+    // --- 위치 계산 ---
     const bx = buildingMesh.position.x;
     const bz = buildingMesh.position.z;
     const side = Math.floor(Math.random() * 4);
 
-    // geometry의 중심축을 잡기 어려우므로, 직접 좌표 계산하여 배치
-    // Extrude 결과물은 (0,0,0)이 삼각형의 뾰족한 끝점임.
+    // [핵심 보정] 박스의 '중심'이 아니라 '윗면'이 바닥/옥상과 이어지도록 Y축 내림
+    // 두께의 절반 * 코사인(각도) 만큼 내려야 표면이 딱 맞음
+    const verticalShift = (rampThickness / 2) * Math.cos(angle);
+    const rampY = groundY + (rise / 2) - verticalShift;
+
+    // 중심점으로부터의 수평 거리 오프셋 (밑변의 절반)
+    const offset = run / 2;
+
+    let rampX, rampZ, rotX, rotZ;
 
     switch(side) {
-        case 0: // Front (건물 앞쪽, +Z 방향)
-            // 삼각형을 세우고, 건물 튀어나온 만큼 이동
-            ramp.rotation.y = -Math.PI / 2; // Y축 회전해서 앞으로 뻗게 함
-            ramp.position.set(
-                bx + rampWidth / 2,         // X축 중앙 정렬 (두께 절반만큼 이동)
-                groundY,                    // 바닥에 딱 붙임
-                bz + bDepth / 2 + rampLength // 건물 벽에서 길이만큼 앞으로 나와서 시작
-            );
+        case 0: // Front (+Z 방향으로 튀어나옴)
+            rampX = bx;
+            // 건물 앞벽(depth/2)에서 시작해서 offset만큼 나감
+            rampZ = bz + (bDepth / 2) + offset;
+            rotX = -angle; // 앞으로 기울임
+            rotZ = 0;
             break;
 
-        case 1: // Back (건물 뒤쪽, -Z 방향)
-            ramp.rotation.y = Math.PI / 2; 
-            ramp.position.set(
-                bx - rampWidth / 2, 
-                groundY, 
-                bz - bDepth / 2 - rampLength
-            );
+        case 1: // Back (-Z 방향으로 튀어나옴)
+            rampX = bx;
+            // 건물 뒷벽(-depth/2)에서 시작해서 offset만큼 뒤로 나감
+            rampZ = bz - (bDepth / 2) - offset;
+            rotX = angle; // 뒤로 기울임
+            rotZ = 0;
             break;
 
-        case 2: // Left (건물 왼쪽, -X 방향)
-            ramp.rotation.y = 0; // 회전 없음 (기본이 X축 방향)
-            ramp.position.set(
-                bx - bWidth / 2 - rampLength, 
-                groundY, 
-                bz + rampWidth / 2
-            );
-            // 기본 Shape가 오른쪽(+X)을 보고 있으므로, 뒤집어야 함? 
-            // 아니면 좌표를 반대로? -> Shape가 (0,0) -> (Len,0) 이므로 +X 방향임.
-            // 왼쪽 벽에 붙이려면 반대로 돌려야 함.
-            ramp.rotation.y = 0; 
-            // Shape가 오른쪽으로 커지므로... 
-            // 사실 Shape를 그릴 때 방향을 타는데, 단순히 오브젝트를 돌리는게 편함.
-            
-            // 왼쪽면: 180도 돌려서 붙이기? 아님.
-            // Shape: 뾰족(0,0) -> 벽(Len,0).
-            // 왼쪽 벽이면: 뾰족한게 왼쪽 멀리(-X) 있어야 함.
-            // Shape는 +X로 그려짐. -> 180도 돌리면 됨? X.
-            // 그냥 위치를 잘 잡자.
-            
-            // 다시 설정: 
-            // Left면 (-X 방향). Shape는 +X로 그려짐. -> Z축으로 180도 회전? 아님 Y축으로.
-            // 그냥 mesh를 돌리겠습니다.
-            ramp.rotation.y = 0;
-            ramp.position.set(bx - bWidth/2 - rampLength, groundY, bz + rampWidth/2);
-            // *Shape는 +X방향으로 그려짐* // 따라서 (bx - width - len) 위치에 두면 오른쪽으로 그려져서 건물 벽에 닿음.
+        case 2: // Left (-X 방향으로 튀어나옴)
+            // 건물 왼쪽벽(-width/2)에서 시작해서 offset만큼 왼쪽으로 나감
+            rampX = bx - (bWidth / 2) - offset;
+            rampZ = bz;
+            rotX = 0;
+            rotZ = -angle; // 왼쪽으로 기울임 (Z축 회전)
+            ramp.rotation.y = Math.PI / 2; // 박스를 세로로 돌림
             break;
 
-        case 3: // Right (건물 오른쪽, +X 방향)
-            // 오른쪽 벽이면: 뾰족한게 오른쪽 멀리(+X) 있어야 함.
-            // Shape는 +X로 그려짐. -> 이걸 Y축으로 180도 돌려서 <- 모양으로 만듦
-            ramp.rotation.y = Math.PI;
-            ramp.position.set(
-                bx + bWidth / 2 + rampLength, 
-                groundY, 
-                bz - rampWidth / 2 // 180도 돌리면 Z축(두께) 방향도 반대가 됨 고려
-            );
+        case 3: // Right (+X 방향으로 튀어나옴)
+            // 건물 오른쪽벽(+width/2)에서 시작해서 offset만큼 오른쪽으로 나감
+            rampX = bx + (bWidth / 2) + offset;
+            rampZ = bz;
+            rotX = 0;
+            rotZ = angle; // 오른쪽으로 기울임
+            ramp.rotation.y = Math.PI / 2;
             break;
     }
 
-    // 그림자 설정
+    // 위치 & 회전 적용
+    ramp.position.set(rampX, rampY, rampZ);
+    ramp.rotateX(rotX);
+    ramp.rotateZ(rotZ);
+    
+    // 그림자
     ramp.castShadow = true;
     ramp.receiveShadow = true;
 
-    // 충돌 박스 업데이트
+    // --- 물리 충돌 박스 설정 ---
     ramp.updateMatrixWorld();
     ramp.geometry.computeBoundingBox();
     ramp.userData.box = new THREE.Box3().setFromObject(ramp);
     
-    // 바닥 판정 (가장 중요)
+    // [중요] 바닥이면서 동시에 벽으로 등록
+    // isFloor: 위를 걸을 수 있게 함
+    // walls.push: 옆구리에 부딪혔을 때 통과하지 않게 함
     ramp.userData.isFloor = true;
-
     colliders.floors.push(ramp);
+    colliders.walls.push(ramp); 
+
     scene.add(ramp);
 }
 
@@ -1180,27 +1161,54 @@ function spawnPlayerSafely(player, maxTries = 30) {
     return false;
 }
 
+// 플레이어 벽 충돌 감지 (Raycaster 버전 - 회전된 경사로 정밀 감지)
 function playerIntersectsWall(pos) {
-    const c = player.userData.collider;
-    if (!c) return false;
+    // 플레이어의 허리 높이 (바닥에서 약간 위)
+    const rayOrigin = new THREE.Vector3(pos.x, pos.y + 1.0, pos.z);
+    
+    // 8방향으로 레이저를 쏴서 벽이 있는지 검사 (몸통 두께만큼)
+    const directions = [
+        new THREE.Vector3(1, 0, 0),  // 우
+        new THREE.Vector3(-1, 0, 0), // 좌
+        new THREE.Vector3(0, 0, 1),  // 앞
+        new THREE.Vector3(0, 0, -1), // 뒤
+        new THREE.Vector3(0.7, 0, 0.7),   // 대각선
+        new THREE.Vector3(-0.7, 0, 0.7),
+        new THREE.Vector3(0.7, 0, -0.7),
+        new THREE.Vector3(-0.7, 0, -0.7)
+    ];
 
-    const bottom = new THREE.Vector3(pos.x, pos.y, pos.z);
-    const top = new THREE.Vector3(pos.x, pos.y + c.height, pos.z);
+    const wallRay = new THREE.Raycaster();
+    const checkRadius = 1.0; // 플레이어 몸통 반지름 (충돌 범위)
 
-    for (const wall of colliders.walls) {
-        if (!wall.userData.box) continue;
+    // colliders.walls에 있는 모든 물체(건물, 경사로) 검사
+    for (const dir of directions) {
+        wallRay.set(rayOrigin, dir);
+        
+        // true: 모든 자식 메쉬까지 정밀 검사
+        const hits = wallRay.intersectObjects(colliders.walls, false); 
+        
+        if (hits.length > 0) {
+            // 레이저가 닿았는데 그 거리가 내 몸통보다 가깝다면 -> 충돌!
+            if (hits[0].distance < checkRadius) {
+                // 단, '바닥(Floor)' 속성이 있는 경사로라면
+                // 내 발보다 확실히 낮은 곳(밟을 수 있는 곳)은 벽으로 치지 않음
+                // (경사로 옆구리는 벽, 윗면은 바닥으로 처리하기 위함)
+                const hitObj = hits[0].object;
+                const hitPointY = hits[0].point.y;
+                
+                // 충돌 지점이 내 발(pos.y)보다 높으면 벽임 (못 지나감)
+                // 충돌 지점이 내 발보다 낮으면 밟고 지나가는 바닥임 (지나감)
+                // 여유값 0.3 (계단 턱 높이)
+                if (hitObj.userData.isFloor && hitPointY <= pos.y + 0.5) {
+                    continue; // 밟고 지나가라
+                }
 
-        wall.userData.box
-            .copy(wall.geometry.boundingBox)
-            .applyMatrix4(wall.matrixWorld);
-
-        if (
-            wall.userData.box.distanceToPoint(bottom) < c.radius ||
-            wall.userData.box.distanceToPoint(top) < c.radius
-        ) {
-            return true;
+                return true; // 벽에 막힘
+            }
         }
     }
+
     return false;
 }
 
