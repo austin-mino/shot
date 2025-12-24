@@ -424,45 +424,120 @@ function createDebris(x, z, radius, count) {
 ================================ */
 
 function createBuilding(x, z) {
-    const wallColors = [0x2F4F4F, 0x556B2F, 0x4a4a4a, 0x1a1a2e, 0x3d3d3d];
-    const neonColors = [0x00ffff, 0xff00ff, 0xffff00, 0xff3333];
-    const hasNeon = Math.random() < 0.4;
+    // 1. 미래적인 재질 설정 (어두운 바디 + 강렬한 네온)
+    const bodyColor = 0x111111; // 거의 검은색에 가까운 금속
+    const neonColors = [0x00ffff, 0xff00ff, 0x00ff00, 0xffaa00, 0xffffff]; // 사이버펑크 네온 팔레트
+    const mainNeonColor = neonColors[Math.floor(Math.random() * neonColors.length)];
 
+    // 건물 본체 재질 (어둡고 거친 금속 느낌)
     const wallMat = new THREE.MeshStandardMaterial({
-        color: wallColors[Math.floor(Math.random() * wallColors.length)],
-        roughness: 0.3,
-        metalness: 0.6,
-        emissive: hasNeon ? neonColors[Math.floor(Math.random() * neonColors.length)] : 0x000000,
-        emissiveIntensity: hasNeon ? 0.5 : 0
+        color: bodyColor,
+        roughness: 0.2, // 약간 반들거림
+        metalness: 0.8  // 금속성 강화
+    });
+
+    // 네온 재질 (강하게 빛남)
+    const neonMat = new THREE.MeshStandardMaterial({
+        color: mainNeonColor,
+        emissive: mainNeonColor,
+        emissiveIntensity: 2.0, // 강한 발광
+        roughness: 0.0,
+        metalness: 0.0
     });
 
     const floorMat = new THREE.MeshStandardMaterial({
-        color: 0x111111,
-        roughness: 1.0
+        color: 0x050505,
+        roughness: 0.9
     });
 
-    const width  = 8 + Math.random() * 6;
-    const depth  = 8 + Math.random() * 6;
-    const height = 10 + Math.random() * 20;
+    // 2. 크기 랜덤 설정
+    const width  = 10 + Math.random() * 6;
+    const depth  = 10 + Math.random() * 6;
+    const height = 15 + Math.random() * 25; // 더 높고 웅장하게
 
-    // 건물 본체
+    // 3. 건물 본체 (물리 충돌체 역할)
     const building = new THREE.Mesh(
         new THREE.BoxGeometry(width, height, depth),
         wallMat
     );
-    
-    // 기울기 제거 또는 최소화 (걷기 편하게)
+
+    // 위치 설정
     building.position.set(x, groundY + height / 2, z);
     building.castShadow = true;
     building.receiveShadow = true;
 
+    // --- [디테일 추가] 미래 도시 느낌 내기 ---
+    
+    // 스타일 랜덤 선택 (0: 수직 스트라이프, 1: 코너 기둥, 2: 랜덤 창문)
+    const style = Math.floor(Math.random() * 3);
+
+    if (style === 0) {
+        // 스타일 1: 수직 네온 스트라이프 (Tron 스타일)
+        const stripCount = 4;
+        const stripGeo = new THREE.BoxGeometry(0.5, height, 0.5); // 얇은 기둥
+        
+        // 앞, 뒤, 좌, 우에 네온 기둥 박기
+        for (let i = 0; i < stripCount; i++) {
+            const strip = new THREE.Mesh(stripGeo, neonMat);
+            
+            // 건물 표면에 절반쯤 묻히게 배치
+            if (i === 0) strip.position.set(0, 0, depth/2); // 앞
+            if (i === 1) strip.position.set(0, 0, -depth/2); // 뒤
+            if (i === 2) strip.position.set(width/2, 0, 0); // 우
+            if (i === 3) strip.position.set(-width/2, 0, 0); // 좌
+            
+            building.add(strip); // 건물의 자식으로 추가 (같이 움직임)
+        }
+    } 
+    else if (style === 1) {
+        // 스타일 2: 코너 가드 (건물 모서리에 네온)
+        const cornerGeo = new THREE.BoxGeometry(0.8, height, 0.8);
+        const positions = [
+            [width/2, depth/2], [width/2, -depth/2],
+            [-width/2, depth/2], [-width/2, -depth/2]
+        ];
+        
+        positions.forEach(pos => {
+            const pillar = new THREE.Mesh(cornerGeo, neonMat);
+            pillar.position.set(pos[0], 0, pos[1]);
+            building.add(pillar);
+        });
+    } 
+    else {
+        // 스타일 3: 데이터 서버 스타일 (랜덤한 네온 점들)
+        const windowSize = 0.5;
+        const windowGeo = new THREE.BoxGeometry(windowSize, windowSize, 0.2);
+        
+        for (let i = 0; i < 10; i++) { // 면마다 10개 정도
+            const win = new THREE.Mesh(windowGeo, neonMat);
+            
+            // 랜덤 면 선택 (앞/뒤/좌/우)
+            const face = Math.floor(Math.random() * 4);
+            const wX = (Math.random() - 0.5) * width * 0.8;
+            const wY = (Math.random() - 0.5) * height * 0.8;
+            const wZ = (Math.random() - 0.5) * depth * 0.8;
+
+            if (face === 0) win.position.set(wX, wY, depth/2);
+            else if (face === 1) win.position.set(wX, wY, -depth/2);
+            else if (face === 2) win.position.set(width/2, wY, wZ);
+            else win.position.set(-width/2, wY, wZ);
+
+            if (face > 1) win.rotation.y = Math.PI / 2;
+            
+            building.add(win);
+        }
+    }
+
+    // ------------------------------------
+
+    // 물리 충돌 박스 등록 (본체 기준)
     building.updateMatrixWorld();
     building.geometry.computeBoundingBox();
     building.userData.box = new THREE.Box3().setFromObject(building);
     colliders.walls.push(building);
     scene.add(building);
 
-    // 옥상
+    // 4. 옥상 (Roof) - 걷기용
     const roofThickness = 0.5;
     const roof = new THREE.Mesh(
         new THREE.BoxGeometry(width, roofThickness, depth),
@@ -470,117 +545,102 @@ function createBuilding(x, z) {
     );
     roof.position.set(x, groundY + height, z);
     roof.receiveShadow = true;
-    roof.userData.isFloor = true; 
+    roof.userData.isFloor = true;
     
+    // 옥상 테두리에 네온 두르기 (낙사 방지 가이드라인 역할도 함)
+    const roofBorderGeo = new THREE.BoxGeometry(width + 0.2, 0.2, depth + 0.2);
+    const roofBorder = new THREE.Mesh(roofBorderGeo, neonMat);
+    roofBorder.position.y = 0; // roof 기준 로컬 0
+    roof.add(roofBorder);
+
     roof.updateMatrixWorld();
     roof.geometry.computeBoundingBox();
     roof.userData.box = new THREE.Box3().setFromObject(roof);
     colliders.floors.push(roof);
     scene.add(roof);
 
-    // 경사로
+    // 5. 경사로 연결 (기존 로직 유지)
     createRampToRoof(building, width, depth, height);
 
-    // [수정] 건물 주변 잔해 개수 대폭 감소 (5 -> 1~2개)
+    // 6. 주변 잔해 (사이버펑크 폐허 느낌으로 개수 소량 유지)
     createDebris(x, z, width + 4, Math.floor(Math.random() * 2) + 1);
 }
 
-// 2. 경사로 (수정: 박스 회전 방식 - 표면 높이 정밀 보정)
+// 2. 경사로 (수정: 벡터 연결 방식 + 원래 함수 이름)
 function createRampToRoof(buildingMesh, bWidth, bDepth, bHeight) {
-    const rampWidth = 3.0; // 경사로 폭
-    const rampThickness = 2.0; // 두께 (물리 뚫림 방지용)
+    const rampWidth = 4.0;  // 걷기 편하게 폭을 넓힘
+    const rampThickness = 2.0; // 두께 (물리 뚫림 방지)
 
-    // [설정] 경사를 얼마나 완만하게 할 것인가 (높이의 2.2배 거리)
-    // 이 값이 클수록 경사가 완만해져서 걷기 편합니다.
-    const run = bHeight * 2.2; 
-    const rise = bHeight;
-    
-    // 피타고라스로 빗변(실제 경사로 길이) 계산
-    // 양 끝을 조금 더 길게(+1.0) 해서 건물/바닥 속으로 파묻히게 함 (틈새 방지)
-    const overlap = 1.0; 
-    const rampLen = Math.sqrt(run * run + rise * rise) + overlap;
-
-    // 경사 각도 계산 (라디안)
-    const angle = Math.atan2(rise, run);
-
-    // 지오메트리 & 재질
-    const rampGeo = new THREE.BoxGeometry(rampWidth, rampThickness, rampLen);
-    const rampMat = new THREE.MeshStandardMaterial({ 
-        color: 0x444444, 
-        roughness: 0.9, 
-        metalness: 0.5,
-        side: THREE.DoubleSide // 양면 렌더링 (시각적 뚫림 방지)
-    });
-    const ramp = new THREE.Mesh(rampGeo, rampMat);
-
-    // --- 위치 계산 ---
+    // [호환성 수정] buildingMesh에서 좌표 추출
     const bx = buildingMesh.position.x;
     const bz = buildingMesh.position.z;
+
+    // 1. 목표 지점 설정 (옥상 모서리와 땅바닥)
+    const run = bHeight * 1.8; // 밑변 길이
+
+    // 옥상 높이보다 반 두께만큼 내려서 타겟팅 -> 윗면이 옥상 바닥과 평평하게 만남
+    const yTop = groundY + bHeight - (rampThickness / 2); 
+    const yBot = groundY - (rampThickness / 2); // 땅에 살짝 박히게
+
+    // 시작점(Bot)과 끝점(Top) 벡터 준비
+    const topPos = new THREE.Vector3();
+    const botPos = new THREE.Vector3();
+
+    // 랜덤 방향 (0:앞, 1:뒤, 2:왼, 3:오)
     const side = Math.floor(Math.random() * 4);
 
-    // [핵심 보정] 박스의 '중심'이 아니라 '윗면'이 바닥/옥상과 이어지도록 Y축 내림
-    // 두께의 절반 * 코사인(각도) 만큼 내려야 표면이 딱 맞음
-    const verticalShift = (rampThickness / 2) * Math.cos(angle);
-    const rampY = groundY + (rise / 2) - verticalShift;
-
-    // 중심점으로부터의 수평 거리 오프셋 (밑변의 절반)
-    const offset = run / 2;
-
-    let rampX, rampZ, rotX, rotZ;
-
     switch(side) {
-        case 0: // Front (+Z 방향으로 튀어나옴)
-            rampX = bx;
-            // 건물 앞벽(depth/2)에서 시작해서 offset만큼 나감
-            rampZ = bz + (bDepth / 2) + offset;
-            rotX = -angle; // 앞으로 기울임
-            rotZ = 0;
+        case 0: // Front (+Z)
+            // 건물 앞쪽 벽 중앙에서 시작
+            topPos.set(bx, yTop, bz + bDepth / 2);
+            botPos.set(bx, yBot, bz + bDepth / 2 + run);
             break;
-
-        case 1: // Back (-Z 방향으로 튀어나옴)
-            rampX = bx;
-            // 건물 뒷벽(-depth/2)에서 시작해서 offset만큼 뒤로 나감
-            rampZ = bz - (bDepth / 2) - offset;
-            rotX = angle; // 뒤로 기울임
-            rotZ = 0;
+        case 1: // Back (-Z)
+            topPos.set(bx, yTop, bz - bDepth / 2);
+            botPos.set(bx, yBot, bz - bDepth / 2 - run);
             break;
-
-        case 2: // Left (-X 방향으로 튀어나옴)
-            // 건물 왼쪽벽(-width/2)에서 시작해서 offset만큼 왼쪽으로 나감
-            rampX = bx - (bWidth / 2) - offset;
-            rampZ = bz;
-            rotX = 0;
-            rotZ = -angle; // 왼쪽으로 기울임 (Z축 회전)
-            ramp.rotation.y = Math.PI / 2; // 박스를 세로로 돌림
+        case 2: // Left (-X)
+            topPos.set(bx - bWidth / 2, yTop, bz);
+            botPos.set(bx - bWidth / 2 - run, yBot, bz);
             break;
-
-        case 3: // Right (+X 방향으로 튀어나옴)
-            // 건물 오른쪽벽(+width/2)에서 시작해서 offset만큼 오른쪽으로 나감
-            rampX = bx + (bWidth / 2) + offset;
-            rampZ = bz;
-            rotX = 0;
-            rotZ = angle; // 오른쪽으로 기울임
-            ramp.rotation.y = Math.PI / 2;
+        case 3: // Right (+X)
+            topPos.set(bx + bWidth / 2, yTop, bz);
+            botPos.set(bx + bWidth / 2 + run, yBot, bz);
             break;
     }
 
-    // 위치 & 회전 적용
-    ramp.position.set(rampX, rampY, rampZ);
-    ramp.rotateX(rotX);
-    ramp.rotateZ(rotZ);
+    // 2. 길이 및 위치 계산
+    // 두 점 사이의 거리 계산 (정확한 경사로 길이)
+    // +2.0은 틈새 방지용 여유분 (Overlap)
+    const rampLen = topPos.distanceTo(botPos) + 2.0; 
+
+    // 두 점의 중간 지점 (경사로의 중심 위치)
+    const midPos = new THREE.Vector3().addVectors(topPos, botPos).multiplyScalar(0.5);
+
+    // 3. 메쉬 생성
+    // BoxGeometry의 Z축을 길이로 사용
+    const rampGeo = new THREE.BoxGeometry(rampWidth, rampThickness, rampLen);
+    const rampMat = new THREE.MeshStandardMaterial({ 
+        color: 0x555555, 
+        roughness: 0.9, 
+        side: THREE.DoubleSide 
+    });
     
-    // 그림자
+    const ramp = new THREE.Mesh(rampGeo, rampMat);
+
+    // 4. 배치 및 회전
+    ramp.position.copy(midPos);
+    ramp.lookAt(topPos); // [핵심] 경사로가 옥상 지점을 바라보게 함
+
+    // 5. 물리/그림자 설정
     ramp.castShadow = true;
     ramp.receiveShadow = true;
 
-    // --- 물리 충돌 박스 설정 ---
     ramp.updateMatrixWorld();
     ramp.geometry.computeBoundingBox();
     ramp.userData.box = new THREE.Box3().setFromObject(ramp);
     
-    // [중요] 바닥이면서 동시에 벽으로 등록
-    // isFloor: 위를 걸을 수 있게 함
-    // walls.push: 옆구리에 부딪혔을 때 통과하지 않게 함
+    // 바닥/벽 등록
     ramp.userData.isFloor = true;
     colliders.floors.push(ramp);
     colliders.walls.push(ramp); 
@@ -1492,7 +1552,7 @@ updateGround(player);
 
     // 9. 적/보스 스폰 & AI
     if(state.score>=state.nextBossScore && !state.bossSpawned){ spawnBoss(); state.nextBossScore+=5000; }
-   if (!boss && state.enemies.length < 16 && Math.random() < 0.03) {
+   if (!boss && state.enemies.length < 16 && Math.random() < 0.005) {
   // 적 생성 후
 const e = createDetailedHumanoid(0xff4444, false); // 일반 적 빨강
 e.userData.boxSize = new THREE.Vector3(0.8, 1.8, 0.8);
@@ -1539,7 +1599,7 @@ if (spawnEnemySafely(e, player.position)) {
             if(e.userData.shootCooldown<=0){
                 const dir=new THREE.Vector3().subVectors(player.position,e.position).normalize();
                 fireBullet(true,e.position.clone().add(new THREE.Vector3(0,1.6,0)),dir);
-                e.userData.shootCooldown=2.2;
+                e.userData.shootCooldown=4;
             }
         }
 
@@ -1612,19 +1672,35 @@ if (spawnEnemySafely(e, player.position)) {
                     // 순간이동을 원하면 반복문으로 여러번 호출하거나 로직을 바꿔야 함.
                     // 여기서는 안전하게 "강력한 한 걸음"으로 대체
                 }
-                if(type==='summoner'){
-                    for(let i=0;i<phase;i++){
-                        const minion = createDetailedHumanoid(0xff7777,false);
-                        // [수정] 미니언 스폰도 안전하게 (spawnEnemySafely 사용 추천)
-                        // 여기서는 일단 기존 위치 근처에 생성하되, 물리 루프에서 바닥 보정됨
-                        minion.position.copy(e.position).add(new THREE.Vector3((Math.random()-0.5)*6,0,(Math.random()-0.5)*6));
-                        minion.userData.isGunner = true;
-                        minion.userData.shootCooldown = 1.5;
-                        scene.add(minion);
-                        state.enemies.push(minion);
-                        state.gunnerCount++;
-                    }
-                }
+               if(type === 'summoner'){
+    // [설명] 페이즈 1,2면 1마리, 페이즈 3이면 2마리 소환
+    for(let i = 0; i < (phase === 3 ? 2 : 1); i++){
+        
+        // 1. 적이 너무 많으면 소환 중단 (렉 방지)
+        if(state.enemies.length >= 8) break;
+
+        const minion = createDetailedHumanoid(0xff7777, false); // 기본은 분홍색
+        
+        // 2. 위치 설정 (보스 주변)
+        minion.position.copy(e.position).add(new THREE.Vector3((Math.random()-0.5)*6, 0, (Math.random()-0.5)*6));
+        
+        // 3. Gunner 속성 부여
+        minion.userData.isGunner = true;
+        minion.userData.shootCooldown = 1.5;
+
+        // [추가] Gunner니까 주황색으로 옷 갈아입히기 (플레이어 식별용)
+        minion.traverse(obj => {
+            if (obj.isMesh && obj.material) {
+                obj.material = obj.material.clone();
+                obj.material.color.set(0xff8800); // 주황색
+            }
+        });
+
+        scene.add(minion);
+        state.enemies.push(minion);
+        state.gunnerCount++;
+    }
+}
                 if(phase===3) camera.position.add(new THREE.Vector3((Math.random()-0.5)*0.4,(Math.random()-0.5)*0.4,0));
             }
         } else { 
