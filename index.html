@@ -1608,7 +1608,7 @@ updateGround(player);
 
     // 9. 적/보스 스폰 & AI
     if(state.score>=state.nextBossScore && !state.bossSpawned){ spawnBoss(); state.nextBossScore+=5000; }
-   if (!boss && state.enemies.length < 16 && Math.random() < 0.005) {
+   if (!boss && state.enemies.length < 16 && Math.random() < 0.03) {
   // 적 생성 후
 const e = createDetailedHumanoid(0xff4444, false); // 일반 적 빨강
 e.userData.boxSize = new THREE.Vector3(0.8, 1.8, 0.8);
