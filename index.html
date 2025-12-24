@@ -298,18 +298,16 @@ const generatedPositions = new Set();
 scene.background = new THREE.Color(0x050508); 
 scene.fog = new THREE.FogExp2(0x0a0a10, 0.0025); 
 
-// 조명 (변수명 충돌 방지를 위해 이름 변경)
 const ambientLight = new THREE.AmbientLight(0x222222, 2); 
 scene.add(ambientLight);
 
-// 달빛 (기존 dirLight -> moonLight)
 const moonLight = new THREE.DirectionalLight(0xaaccff, 0.5);
 moonLight.position.set(-50, 100, 50);
 moonLight.castShadow = true;
 scene.add(moonLight);
 
 /* ===============================
-   전체 바닥 (오염된 대지)
+   전체 바닥
 ================================ */
 
 function createGround(size = 500) {
@@ -327,7 +325,7 @@ function createGround(size = 500) {
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = groundY;
     ground.receiveShadow = true;
-    ground.userData.isFloor = true; // 바닥 판정 필수
+    ground.userData.isFloor = true;
 
     colliders.floors.push(ground);
     scene.add(ground);
@@ -356,7 +354,6 @@ function createMapBoundaryWalls() {
         wall.position.set(x, y, z);
         wall.castShadow = true;
         wall.receiveShadow = true;
-
         wall.geometry.computeBoundingBox();
         wall.userData.box = new THREE.Box3().setFromObject(wall);
 
@@ -374,14 +371,13 @@ function createMapBoundaryWalls() {
 createMapBoundaryWalls();
 
 /* ===============================
-   유틸리티: 랜덤 잔해 생성기 (수정됨)
+   유틸리티: 랜덤 잔해 생성기 (개수 대폭 감소)
 ================================ */
 function createDebris(x, z, radius, count) {
-    // [수정] 잔해가 너무 어두워서 안 보이는 문제 해결 -> 밝은 콘크리트 색 추가
     const debrisColors = [0x888888, 0x666666, 0x555555, 0x333333];
     
     for(let i=0; i<count; i++) {
-        const size = 0.5 + Math.random() * 1.2;
+        const size = 0.5 + Math.random() * 1.0; // 크기도 약간 줄임
         const debrisMat = new THREE.MeshStandardMaterial({
             color: debrisColors[Math.floor(Math.random() * debrisColors.length)],
             roughness: 0.9
@@ -403,7 +399,6 @@ function createDebris(x, z, radius, count) {
         mesh.geometry.computeBoundingBox();
         mesh.userData.box = new THREE.Box3().setFromObject(mesh);
         
-        // [수정] 크기가 작아도 밟을 수 있게 허용 (선택 사항)
         // 0.6 이상이면 바닥으로 인정
         if(size > 0.6) {
             mesh.userData.isFloor = true;
@@ -446,11 +441,7 @@ function createBuilding(x, z) {
         wallMat
     );
     
-    const tiltX = (Math.random() - 0.5) * 0.1; 
-    const tiltZ = (Math.random() - 0.5) * 0.1; 
-    building.rotation.x = tiltX;
-    building.rotation.z = tiltZ;
-
+    // 기울기 제거 또는 최소화 (걷기 편하게)
     building.position.set(x, groundY + height / 2, z);
     building.castShadow = true;
     building.receiveShadow = true;
@@ -468,9 +459,6 @@ function createBuilding(x, z) {
         floorMat
     );
     roof.position.set(x, groundY + height, z);
-    roof.rotation.x = tiltX;
-    roof.rotation.z = tiltZ;
-    
     roof.receiveShadow = true;
     roof.userData.isFloor = true; 
     
@@ -481,24 +469,29 @@ function createBuilding(x, z) {
     scene.add(roof);
 
     // 경사로
-    createRampToRoof(building, width, depth, height, tiltX, tiltZ);
+    createRampToRoof(building, width, depth, height);
 
-    // 주변 잔해
-    createDebris(x, z, width + 5, 5);
+    // [수정] 건물 주변 잔해 개수 대폭 감소 (5 -> 1~2개)
+    createDebris(x, z, width + 4, Math.floor(Math.random() * 2) + 1);
 }
 
-// 2. 경사로 (수정됨: 크기 축소, 밟힘 문제 해결)
-function createRampToRoof(buildingMesh, bWidth, bDepth, bHeight, tiltX, tiltZ) {
-    // [수정] 폭을 4 -> 2.5로 축소
-    const rampWidth = 2.5; 
+// 2. 경사로 (수정: 완만하게, 두껍게)
+function createRampToRoof(buildingMesh, bWidth, bDepth, bHeight) {
+    const rampWidth = 3.0; 
     
-    // [수정] 경사로 길이를 높이의 1.4배로 (적절한 경사각)
-    const rampBaseLen = bHeight * 1.4;
+    // [핵심 수정 1] 경사 각도 완화
+    // 높이의 2.2배만큼 밑변을 잡아서 경사를 매우 완만하게 만듦 (약 25도)
+    // 이렇게 하면 점프 없이도 자연스럽게 걸어 올라갈 수 있습니다.
+    const rampBaseLen = bHeight * 2.2; 
     const rampLen = Math.sqrt(bHeight * bHeight + rampBaseLen * rampBaseLen);
 
-    const rampGeo = new THREE.BoxGeometry(rampWidth, 0.5, rampLen); // 두께 0.5
+    // [핵심 수정 2] 경사로 두께 증가 (통과 방지)
+    // 두께(Y)를 2.0으로 늘려서 물리 레이캐스터가 뚫고 지나가는 현상 방지
+    const rampThickness = 2.0;
+    
+    const rampGeo = new THREE.BoxGeometry(rampWidth, rampThickness, rampLen); 
     const rampMat = new THREE.MeshStandardMaterial({ 
-        color: 0x444444, // 약간 밝게 하여 시인성 확보
+        color: 0x444444, 
         roughness: 0.9,
         metalness: 0.5
     });
@@ -510,34 +503,35 @@ function createRampToRoof(buildingMesh, bWidth, bDepth, bHeight, tiltX, tiltZ) {
     const side = Math.floor(Math.random() * 4);
 
     let rampX, rampZ, rotX, rotZ;
-    const rampY = groundY + bHeight / 2; 
+    // 두께가 늘어났으므로 Y위치 조정 (중심점 기준)
+    const rampY = groundY + bHeight / 2 - (rampThickness / 2 * Math.cos(angle)); 
     const offset = (rampBaseLen / 2);
 
     switch(side) {
         case 0: // Front
             rampX = bx;
-            rampZ = bz + bDepth / 2 + offset - 0.5; // 살짝 겹치게(-0.5)
-            rotX = -angle + tiltX;
-            rotZ = tiltZ;
+            rampZ = bz + bDepth / 2 + offset - 0.5;
+            rotX = -angle;
+            rotZ = 0;
             break;
         case 1: // Back
             rampX = bx;
             rampZ = bz - bDepth / 2 - offset + 0.5;
-            rotX = angle + tiltX;
-            rotZ = tiltZ;
+            rotX = angle;
+            rotZ = 0;
             break;
         case 2: // Left
             rampX = bx - bWidth / 2 - offset + 0.5;
             rampZ = bz;
-            rotX = tiltX;
-            rotZ = -angle + tiltZ;
+            rotX = 0;
+            rotZ = -angle;
             ramp.rotation.y = Math.PI / 2; 
             break;
         case 3: // Right
             rampX = bx + bWidth / 2 + offset - 0.5;
             rampZ = bz;
-            rotX = tiltX;
-            rotZ = angle + tiltZ;
+            rotX = 0;
+            rotZ = angle;
             ramp.rotation.y = Math.PI / 2;
             break;
     }
@@ -546,9 +540,6 @@ function createRampToRoof(buildingMesh, bWidth, bDepth, bHeight, tiltX, tiltZ) {
     ramp.rotateX(rotX);
     ramp.rotateZ(rotZ);
     
-    // 비틀기는 유지하되 약간 줄임
-    ramp.rotateY((Math.random() - 0.5) * 0.1); 
-
     ramp.castShadow = true;
     ramp.receiveShadow = true;
 
@@ -556,7 +547,7 @@ function createRampToRoof(buildingMesh, bWidth, bDepth, bHeight, tiltX, tiltZ) {
     ramp.geometry.computeBoundingBox();
     ramp.userData.box = new THREE.Box3().setFromObject(ramp);
     
-    // [중요] 경사로도 바닥으로 인식되게 설정
+    // 바닥 판정
     ramp.userData.isFloor = true;
 
     colliders.floors.push(ramp);
@@ -564,7 +555,7 @@ function createRampToRoof(buildingMesh, bWidth, bDepth, bHeight, tiltX, tiltZ) {
 }
 
 /* ===============================
-   폐허 잔해 필드 (수정됨)
+   폐허 잔해 필드 (수정: 개수 감소)
 ================================ */
 
 function createRuinsField(x, z) {
@@ -572,7 +563,7 @@ function createRuinsField(x, z) {
     
     // 바닥 잔해 베이스
     const baseMat = new THREE.MeshStandardMaterial({
-        color: 0x444444, // 베이스도 약간 밝게
+        color: 0x444444, 
         roughness: 0.9
     });
     
@@ -595,8 +586,9 @@ function createRuinsField(x, z) {
         scene.add(platform);
     }
 
-    // [수정] 잔해 개수 증가 (10 -> 25) 및 더 넓게 퍼뜨림
-    createDebris(x, z, size * 0.6, 25);
+    // [수정] 잔해 개수 대폭 감소 (25 -> 8개)
+    // 너무 많으면 이동에 방해됨
+    createDebris(x, z, size * 0.6, 8);
 }
 
 /* ===============================
@@ -637,7 +629,6 @@ function updateCity(playerX, playerZ) {
         }
     }
 }
-
 
 
         // --- 4. 컨트롤 & 카메라 로직 개선 ---
