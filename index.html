@@ -658,7 +658,7 @@ function createBuilding(x, z) {
     createRampToRoof(building, width, depth, height);
 
     // 6. 주변 잔해 (사이버펑크 폐허 느낌으로 개수 소량 유지)
-   const debrisCount = Math.random() < 0.5 ? 3 : 2;
+   const debrisCount = Math.random() < 0.5 ? 2 : 1;
     if (debrisCount > 0) {
         createDebris(x, z, width + 4, debrisCount);
     }
