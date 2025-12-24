@@ -1151,61 +1151,54 @@ if (isMobile) {
 }
 
 
-   function spawnBoss() {
-    // 이미 보스 있으면 중복 방지
-    if (state.bossSpawned) return;
+ function spawnBoss() {
+    // 1. 보스 모델 생성 (기존 코드 유지)
+    boss = createDetailedHumanoid(0xff0000, true); // true = 보스 (크게)
+    boss.userData.isGunner = false; // 보스는 패턴으로 공격함
+    boss.userData.maxHp = 1000;
+    boss.userData.hp = 1000;
+    boss.userData.phase = 1;
+    boss.userData.lastPhase = 1;
+    boss.userData.type = Math.random() < 0.33 ? 'tank' : Math.random() < 0.5 ? 'rush' : 'summoner';
+    
+    // 공격 관련 초기화
+    boss.userData.attackTimer = 0;
+    boss.userData.meleeRange = 3.5;
+    boss.userData.meleeCooldown = 0;
+    
+    // [핵심 수정] 위치 설정: 플레이어 앞쪽 + 하늘 위
+    // 플레이어가 서 있는 곳은 안전지대이므로, 그 근처 하늘에서 떨구면 건물에 낄 일이 적음
+    const spawnDist = 20; // 플레이어로부터 거리
+    const dropHeight = 30; // 낙하 높이 (건물보다 높게)
 
+    // 플레이어가 바라보는 방향 앞쪽 계산
+    const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion).normalize();
+    
+    // 최종 위치: 플레이어 위치 + (앞으로 20m) + (위로 30m)
+    const spawnPos = player.position.clone()
+        .add(direction.multiplyScalar(spawnDist))
+        .add(new THREE.Vector3(0, dropHeight, 0));
+
+    // 맵 밖으로 나가는 것 방지 (범위 제한)
+    spawnPos.x = Math.max(-MAP_HALF + 10, Math.min(MAP_HALF - 10, spawnPos.x));
+    spawnPos.z = Math.max(-MAP_HALF + 10, Math.min(MAP_HALF - 10, spawnPos.z));
+
+    boss.position.copy(spawnPos);
+
+    // 물리 초기화
+    if (!boss.userData.velocity) boss.userData.velocity = new THREE.Vector3();
+    boss.userData.velocity.y = 0; // 떨어지기 시작
+
+    // 씬에 추가 및 상태 업데이트
+    scene.add(boss);
     state.bossSpawned = true;
 
-    // 보스 생성
-    boss = createDetailedHumanoid(0xff0000, false, 2.5);
-
-    // 기본 위치
-    boss.position.set(
-        player.position.x + 40,
-        10,
-        player.position.z + 40
-    );
-
-    // 보스 스탯
-    boss.userData.hp = 3000;
-    boss.userData.maxHp = 3000;
-    boss.userData.attackTimer = 0;
-    boss.userData.phase = 1;
-    boss.userData.lastPhase = 0;
-
-       boss.userData.meleeCooldown = 0;
-boss.userData.meleeRange = 3.5;
-boss.userData.meleeDamage = 12;
-
-
-    // 보스 타입 랜덤
-    const types = ['tank', 'rush', 'summoner'];
-    boss.userData.type = types[Math.floor(Math.random() * types.length)];
-
-    // 외형 적용
-    applyBossAppearance(boss);
-
-    // 씬 추가
-       boss.userData.boxSize = new THREE.Vector3(1.4, 3.2, 1.4);
-
-    scene.add(boss);
-boss.userData.velocity.y = 0;
-updateGround(boss);
-
-    // ===== UI =====
+    // UI 표시
     document.getElementById('boss-ui').style.display = 'block';
     document.getElementById('boss-hp-fill').style.width = '100%';
-
     document.getElementById('boss-phase').innerText = 'PHASE 1';
-
-    const msg = document.getElementById('boss-msg');
-    msg.innerText = `⚠ ${boss.userData.type.toUpperCase()} BOSS ⚠`;
-    msg.style.display = 'block';
-
-    setTimeout(() => {
-        msg.style.display = 'none';
-    }, 3000);
+    
+    console.log(`BOSS SPAWNED AT: ${boss.position.x}, ${boss.position.y}, ${boss.position.z}`);
 }
 
 
@@ -1821,6 +1814,24 @@ updateGround(player);
             msg.innerText=`⚠ PHASE ${boss.userData.phase} ⚠`;
             msg.style.display='block';
             setTimeout(()=>msg.style.display='none',1500);
+        }
+    }
+
+        // [추가] 보스 실종 방지 안전장치
+    if (boss) {
+        // 1. 보스가 맵 아래로 떨어졌다면? (groundY보다 훨씬 아래)
+        if (boss.position.y < groundY - 20) {
+            console.warn("보스 추락 감지! 플레이어 근처로 재소환");
+            // 플레이어 위쪽으로 강제 이동
+            boss.position.copy(player.position).add(new THREE.Vector3(0, 20, 0));
+            boss.userData.velocity.y = 0;
+        }
+
+        // 2. 보스가 너무 멀리 도망갔다면? (맵 밖)
+        if (Math.abs(boss.position.x) > MAP_HALF || Math.abs(boss.position.z) > MAP_HALF) {
+             console.warn("보스 탈주 감지! 맵 중앙으로 복귀");
+             boss.position.set(0, 30, 0); // 맵 중앙 하늘
+             boss.userData.velocity.y = 0;
         }
     }
 
