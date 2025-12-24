@@ -1426,6 +1426,8 @@ function applyEnemyPhysics(enemy) {
     enemy.userData.velocity.y += physics.gravity;
     enemy.position.y += enemy.userData.velocity.y;
 
+    checkEnemyCeilingCollision(enemy);
+
     // 바닥 감지 (Raycaster)
     // 점프 중(상승 중)일 때는 바닥 보정 스킵
     if (enemy.userData.velocity.y > 0) return;
@@ -1619,6 +1621,68 @@ function hitEnemy(enemy, damage) {
         }
     }
 }
+
+
+// [추가] 천장(머리 위) 충돌 감지 함수
+function checkCeilingCollision(player) {
+    // 위로 올라가는 중일 때만 검사 (떨어질 땐 필요 없음)
+    if (player.userData.velocity.y <= 0) return;
+
+    const raycaster = new THREE.Raycaster();
+    
+    // 1. 레이저 시작점: 플레이어 머리 높이 (약 1.7m)
+    const rayOrigin = player.position.clone();
+    rayOrigin.y += 1.7; 
+
+    // 2. 위쪽(Up)으로 발사
+    raycaster.set(rayOrigin, new THREE.Vector3(0, 1, 0));
+
+    // 3. 벽과 바닥(경사로 포함) 모두 검사
+    // 경사로 밑면도 colliders.floors에 포함되어 있으므로 감지됨
+    const targetObjects = [...colliders.walls, ...colliders.floors];
+    const hits = raycaster.intersectObjects(targetObjects, false);
+
+    if (hits.length > 0) {
+        // 머리 위 0.5 거리 내에 무언가 있으면
+        if (hits[0].distance < 0.5) {
+            // [핵심] 머리를 찧었으므로 상승 속도를 0으로 만듦 (떨어지게 됨)
+            player.userData.velocity.y = 0;
+            
+            // (선택) 머리가 파묻히지 않게 살짝 아래로 밀어줌
+            player.position.y -= 0.1;
+        }
+    }
+}
+
+
+        // [추가] 적/보스 전용 천장 충돌 감지
+function checkEnemyCeilingCollision(enemy) {
+    // 위로 상승 중일 때만 검사
+    if (!enemy.userData.velocity || enemy.userData.velocity.y <= 0) return;
+
+    const raycaster = new THREE.Raycaster();
+    
+    // 레이저 시작 높이 조절
+    // 보스면 키가 크니까 4.0 위에서, 일반 적은 1.7 위에서 시작
+    const heightOffset = (enemy === boss) ? 4.0 : 1.7;
+    
+    const rayOrigin = enemy.position.clone();
+    rayOrigin.y += heightOffset; 
+
+    // 위쪽으로 발사
+    raycaster.set(rayOrigin, new THREE.Vector3(0, 1, 0));
+
+    const targetObjects = [...colliders.walls, ...colliders.floors];
+    const hits = raycaster.intersectObjects(targetObjects, false);
+
+    if (hits.length > 0) {
+        // 머리 위 0.5 거리 내에 천장/경사로가 있으면
+        if (hits[0].distance < 0.5) {
+            // 상승 멈춤 (머리 쿵)
+            enemy.userData.velocity.y = 0;
+        }
+    }
+}
         
     function animate() {
     requestAnimationFrame(animate);
@@ -1635,6 +1699,21 @@ function hitEnemy(enemy, damage) {
     const playerZ = camera.position.z;
     updateCity(player.position.x, player.position.z);
     if (!player.userData.isGrounded) updateGround(player);
+        // ... (중략) ...
+
+    // 1. 중력
+    player.userData.velocity.y += physics.gravity;
+
+    // [추가] 천장 충돌 검사 (이동하기 전에 머리 닿는지 확인)
+    checkCeilingCollision(player);
+
+    // 2. 이동 (Y축)
+    player.position.y += player.userData.velocity.y;
+
+    // 3. 즉시 바닥 보정
+    updateGround(player);
+
+    // ... (후략) ...
 
  // 3. 공격 시스템 (총 or 칼)
     if (isFiring) {
