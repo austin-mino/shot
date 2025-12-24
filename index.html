@@ -139,8 +139,11 @@ cameraMode: 'TPS',
         };
 
         const input = { w: false, a: false, s: false, d: false, space: false, joyX: 0, joyY: 0 };
-      
-
+// 수정된 물리 값 (1 unit = 1m 스케일용)
+const physics = { 
+    gravity: -0.035, // 기존 -0.018보다 2배 정도 무겁게
+    jump: 0.65       // 경사로(2m)를 여유롭게 넘음
+};
         // --- 2. 씬 & 렌더러 ---
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x1b2a4a);
@@ -274,10 +277,7 @@ function box(w, h, d, x, y, z) {
     return mesh;
 }
 
-        const physics = {
-    gravity: -0.8,  // 중력
-    jump: 15        // 점프력
-};
+       
 
 // 플레이어 초기화 (velocity & grounded)
 if (!player.userData.velocity) {
