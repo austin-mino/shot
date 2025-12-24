@@ -1055,10 +1055,9 @@ function spawnPlayerSafely(player, maxTries = 30) {
     return false;
 }
 
-        function spawnEnemySafely(enemy, center, maxTries = 40) {
+       function spawnEnemySafely(enemy, center, maxTries = 40) {
     const raycaster = new THREE.Raycaster();
     const spawnRadius = 60;
-    const enemyRadius = 1.2;   // 플레이어보다 조금 크게
     const minWallDistance = 2.2;
 
     for (let i = 0; i < maxTries; i++) {
@@ -1076,25 +1075,52 @@ function spawnPlayerSafely(player, maxTries = 30) {
         const hits = raycaster.intersectObjects(colliders.floors, false);
         if (hits.length === 0) continue;
 
-        const floorObj = hits[0].object;
- const y = hits[0].point.y;
-     const candidate = new THREE.Vector3(x, y + 2, z);
+        // 바닥의 높이(y) 가져오기
+        const y = hits[0].point.y;
 
+        // [핵심] 높이가 땅바닥(groundY)과 다르면(즉, 잔해 위나 옥상이면) 스폰 포기
+        if (Math.abs(y - groundY) > 0.1) {
+            continue; 
+        }
 
-        // 3️⃣ 벽과 거리 검사
+        const candidate = new THREE.Vector3(x, y + 2, z);
+
+        // 3️⃣ 벽(건물 본체)과 거리 검사
         let blocked = false;
-       for (const wall of colliders.walls) {
-    if (!wall.userData.box) continue;
+        for (const wall of colliders.walls) {
+            if (!wall.userData.box) continue;
 
-    wall.userData.box.copy(wall.geometry.boundingBox)
-        .applyMatrix4(wall.matrixWorld);
+            wall.userData.box.copy(wall.geometry.boundingBox)
+                .applyMatrix4(wall.matrixWorld);
 
-    if (wall.userData.box.distanceToPoint(candidate) < minWallDistance) {
-        blocked = true;
-        break;
-    }
-}
+            if (wall.userData.box.distanceToPoint(candidate) < minWallDistance) {
+                blocked = true;
+                break;
+            }
+        }
 
+        if (blocked) continue;
+
+        // [추가] 바닥에 있는 잔해(작은 박스들) '속'에 생성되는 것 방지
+        for (const floorObj of colliders.floors) {
+            // 진짜 땅바닥(ground)은 제외
+            if (floorObj === colliders.floors[0]) continue; 
+
+            if (!floorObj.userData.box) {
+                floorObj.geometry.computeBoundingBox();
+                floorObj.userData.box = new THREE.Box3().setFromObject(floorObj);
+            }
+            
+            // 잔해 박스 위치 업데이트
+            const debrisBox = floorObj.userData.box.clone();
+            debrisBox.applyMatrix4(floorObj.matrixWorld);
+
+            // 잔해와 겹치면 blocked 처리
+            if (debrisBox.distanceToPoint(candidate) < minWallDistance) {
+                blocked = true;
+                break;
+            }
+        }
 
         if (blocked) continue;
 
