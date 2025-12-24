@@ -286,7 +286,7 @@ const viewDistance = 3;
 
 const MAP_SIZE = 500;
 const MAP_HALF = MAP_SIZE / 2;
-const WALL_HEIGHT = 80; // 벽을 더 높게 설정하여 격리 구역 느낌
+const WALL_HEIGHT = 80;
 const WALL_THICKNESS = 10;
 
 const generatedPositions = new Set();
@@ -295,19 +295,18 @@ const generatedPositions = new Set();
    환경 (미래형 폐허 분위기)
 ================================ */
 
-// 어둡고 탁한 미래 도시의 하늘과 안개
 scene.background = new THREE.Color(0x050508); 
-// 짙은 안개로 거리감을 주고 폐허 느낌 강조
 scene.fog = new THREE.FogExp2(0x0a0a10, 0.0025); 
 
-// 조명 추가 (분위기를 위해)
-const ambientLight = new THREE.AmbientLight(0x404040, 2); // 부드러운 전체광
+// 조명 (변수명 충돌 방지를 위해 이름 변경)
+const ambientLight = new THREE.AmbientLight(0x222222, 2); 
 scene.add(ambientLight);
 
-const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
-dirLight.position.set(-50, 100, 50);
-dirLight.castShadow = true;
-scene.add(dirLight);
+// 달빛 (기존 dirLight -> moonLight)
+const moonLight = new THREE.DirectionalLight(0xaaccff, 0.5);
+moonLight.position.set(-50, 100, 50);
+moonLight.castShadow = true;
+scene.add(moonLight);
 
 /* ===============================
    전체 바닥 (오염된 대지)
@@ -315,7 +314,7 @@ scene.add(dirLight);
 
 function createGround(size = 500) {
     const mat = new THREE.MeshStandardMaterial({
-        color: 0x1a1a1a, // 아주 어두운 회색
+        color: 0x1a1a1a, 
         roughness: 0.9,
         metalness: 0.2
     });
@@ -328,7 +327,7 @@ function createGround(size = 500) {
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = groundY;
     ground.receiveShadow = true;
-    ground.userData.isFloor = true;
+    ground.userData.isFloor = true; // 바닥 판정 필수
 
     colliders.floors.push(ground);
     scene.add(ground);
@@ -337,7 +336,7 @@ function createGround(size = 500) {
 createGround(MAP_SIZE);
 
 /* ===============================
-   맵 경계 벽 (거대한 방벽)
+   맵 경계 벽
 ================================ */
 
 function createMapBoundaryWalls() {
@@ -345,7 +344,7 @@ function createMapBoundaryWalls() {
         color: 0x0f0f0f,
         roughness: 0.4,
         metalness: 0.8,
-        emissive: 0x110000, // 붉은색으로 미세하게 빛남 (경고 느낌)
+        emissive: 0x110000,
         emissiveIntensity: 0.2
     });
 
@@ -354,7 +353,6 @@ function createMapBoundaryWalls() {
             new THREE.BoxGeometry(w, h, d),
             mat
         );
-
         wall.position.set(x, y, z);
         wall.castShadow = true;
         wall.receiveShadow = true;
@@ -367,35 +365,30 @@ function createMapBoundaryWalls() {
     }
 
     const y = groundY + WALL_HEIGHT / 2;
-
-    // 북
     makeWall(MAP_SIZE + WALL_THICKNESS * 2, WALL_HEIGHT, WALL_THICKNESS, 0, y, MAP_HALF + WALL_THICKNESS / 2);
-    // 남
     makeWall(MAP_SIZE + WALL_THICKNESS * 2, WALL_HEIGHT, WALL_THICKNESS, 0, y, -MAP_HALF - WALL_THICKNESS / 2);
-    // 동
     makeWall(WALL_THICKNESS, WALL_HEIGHT, MAP_SIZE, MAP_HALF + WALL_THICKNESS / 2, y, 0);
-    // 서
     makeWall(WALL_THICKNESS, WALL_HEIGHT, MAP_SIZE, -MAP_HALF - WALL_THICKNESS / 2, y, 0);
 }
 
 createMapBoundaryWalls();
 
 /* ===============================
-   유틸리티: 랜덤 잔해 생성기
+   유틸리티: 랜덤 잔해 생성기 (수정됨)
 ================================ */
 function createDebris(x, z, radius, count) {
-    const debrisColors = [0x333333, 0x111111, 0x222222, 0x443333];
+    // [수정] 잔해가 너무 어두워서 안 보이는 문제 해결 -> 밝은 콘크리트 색 추가
+    const debrisColors = [0x888888, 0x666666, 0x555555, 0x333333];
     
     for(let i=0; i<count; i++) {
-        const size = 0.5 + Math.random() * 1.5;
+        const size = 0.5 + Math.random() * 1.2;
         const debrisMat = new THREE.MeshStandardMaterial({
             color: debrisColors[Math.floor(Math.random() * debrisColors.length)],
-            roughness: 0.8
+            roughness: 0.9
         });
         
         const mesh = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), debrisMat);
         
-        // 위치 랜덤 (원형 분포)
         const r = Math.random() * radius;
         const theta = Math.random() * Math.PI * 2;
         const dx = r * Math.cos(theta);
@@ -407,11 +400,13 @@ function createDebris(x, z, radius, count) {
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         
-        // 잔해가 크면 밟을 수 있게 설정
         mesh.geometry.computeBoundingBox();
         mesh.userData.box = new THREE.Box3().setFromObject(mesh);
         
-        if(size > 1.0) {
+        // [수정] 크기가 작아도 밟을 수 있게 허용 (선택 사항)
+        // 0.6 이상이면 바닥으로 인정
+        if(size > 0.6) {
+            mesh.userData.isFloor = true;
             colliders.floors.push(mesh);
         } 
         
@@ -420,23 +415,20 @@ function createDebris(x, z, radius, count) {
 }
 
 /* ===============================
-   건물 생성 (미래형 폐허)
+   건물 생성
 ================================ */
 
 function createBuilding(x, z) {
-    // 미래적인 색상 팔레트 (어두운 금속, 녹슨 철, 빛바랜 콘크리트)
     const wallColors = [0x2F4F4F, 0x556B2F, 0x4a4a4a, 0x1a1a2e, 0x3d3d3d];
-    
-    // 네온 효과를 위한 색상 (고장난 전광판 느낌)
     const neonColors = [0x00ffff, 0xff00ff, 0xffff00, 0xff3333];
-    const hasNeon = Math.random() < 0.4; // 40% 확률로 네온 가짐
+    const hasNeon = Math.random() < 0.4;
 
     const wallMat = new THREE.MeshStandardMaterial({
         color: wallColors[Math.floor(Math.random() * wallColors.length)],
         roughness: 0.3,
         metalness: 0.6,
         emissive: hasNeon ? neonColors[Math.floor(Math.random() * neonColors.length)] : 0x000000,
-        emissiveIntensity: hasNeon ? 0.5 : 0 // 은은하게 빛남
+        emissiveIntensity: hasNeon ? 0.5 : 0
     });
 
     const floorMat = new THREE.MeshStandardMaterial({
@@ -446,15 +438,14 @@ function createBuilding(x, z) {
 
     const width  = 8 + Math.random() * 6;
     const depth  = 8 + Math.random() * 6;
-    const height = 10 + Math.random() * 20; // 더 높게 설정
+    const height = 10 + Math.random() * 20;
 
-    // --- 건물 본체 (Body) ---
+    // 건물 본체
     const building = new THREE.Mesh(
         new THREE.BoxGeometry(width, height, depth),
         wallMat
     );
     
-    // 건물을 약간 기울여서 붕괴 직전의 느낌 연출 (아주 미세하게)
     const tiltX = (Math.random() - 0.5) * 0.1; 
     const tiltZ = (Math.random() - 0.5) * 0.1; 
     building.rotation.x = tiltX;
@@ -464,29 +455,18 @@ function createBuilding(x, z) {
     building.castShadow = true;
     building.receiveShadow = true;
 
-    // 벽 충돌 박스
-    building.updateMatrixWorld(); // 회전 적용
+    building.updateMatrixWorld();
     building.geometry.computeBoundingBox();
     building.userData.box = new THREE.Box3().setFromObject(building);
     colliders.walls.push(building);
     scene.add(building);
 
-    // --- 옥상 (Roof) ---
+    // 옥상
     const roofThickness = 0.5;
     const roof = new THREE.Mesh(
         new THREE.BoxGeometry(width, roofThickness, depth),
         floorMat
     );
-    
-    // 본체의 기울기 적용을 위해 위치 및 회전 동기화가 필요하지만,
-    // 간단하게 본체 위에 자식으로 붙이거나 좌표 계산을 합니다.
-    // 여기서는 간단히 본체 높이 기준으로 배치하되, 본체 회전을 따라가게 합니다.
-    
-    // *중요* 회전된 박스 위를 정확히 걷게 하려면 Group을 쓰거나 회전값을 복사해야 합니다.
-    // 여기서는 간단하게 위치만 잡고, 기울기는 적용하지 않아 플레이어가 걷기 편하게 하거나
-    // 분위기를 위해 약간의 오차를 허용합니다.
-    
-    // (수정) 정확한 위치 계산을 위해 간단히 높이만 올립니다.
     roof.position.set(x, groundY + height, z);
     roof.rotation.x = tiltX;
     roof.rotation.z = tiltZ;
@@ -500,22 +480,25 @@ function createBuilding(x, z) {
     colliders.floors.push(roof);
     scene.add(roof);
 
-    // --- 경사로 생성 (무너진 잔해/빔 처럼 보이게) ---
+    // 경사로
     createRampToRoof(building, width, depth, height, tiltX, tiltZ);
 
-    // --- 건물 주변 잔해 생성 ---
-    createDebris(x, z, width + 5, 3);
+    // 주변 잔해
+    createDebris(x, z, width + 5, 5);
 }
 
-// 2. 경사로 (무너진 구조물 느낌)
+// 2. 경사로 (수정됨: 크기 축소, 밟힘 문제 해결)
 function createRampToRoof(buildingMesh, bWidth, bDepth, bHeight, tiltX, tiltZ) {
-    const rampWidth = 4;
-    const rampBaseLen = bHeight * 1.3;
+    // [수정] 폭을 4 -> 2.5로 축소
+    const rampWidth = 2.5; 
+    
+    // [수정] 경사로 길이를 높이의 1.4배로 (적절한 경사각)
+    const rampBaseLen = bHeight * 1.4;
     const rampLen = Math.sqrt(bHeight * bHeight + rampBaseLen * rampBaseLen);
 
-    const rampGeo = new THREE.BoxGeometry(rampWidth, 1, rampLen);
+    const rampGeo = new THREE.BoxGeometry(rampWidth, 0.5, rampLen); // 두께 0.5
     const rampMat = new THREE.MeshStandardMaterial({ 
-        color: 0x333333,
+        color: 0x444444, // 약간 밝게 하여 시인성 확보
         roughness: 0.9,
         metalness: 0.5
     });
@@ -527,32 +510,31 @@ function createRampToRoof(buildingMesh, bWidth, bDepth, bHeight, tiltX, tiltZ) {
     const side = Math.floor(Math.random() * 4);
 
     let rampX, rampZ, rotX, rotZ;
-    // 경사로 시작 높이는 건물 중간보다 약간 아래에서 시작해 바닥에 박히게
     const rampY = groundY + bHeight / 2; 
     const offset = (rampBaseLen / 2);
 
     switch(side) {
         case 0: // Front
             rampX = bx;
-            rampZ = bz + bDepth / 2 + offset;
+            rampZ = bz + bDepth / 2 + offset - 0.5; // 살짝 겹치게(-0.5)
             rotX = -angle + tiltX;
             rotZ = tiltZ;
             break;
         case 1: // Back
             rampX = bx;
-            rampZ = bz - bDepth / 2 - offset;
+            rampZ = bz - bDepth / 2 - offset + 0.5;
             rotX = angle + tiltX;
             rotZ = tiltZ;
             break;
         case 2: // Left
-            rampX = bx - bWidth / 2 - offset;
+            rampX = bx - bWidth / 2 - offset + 0.5;
             rampZ = bz;
             rotX = tiltX;
             rotZ = -angle + tiltZ;
             ramp.rotation.y = Math.PI / 2; 
             break;
         case 3: // Right
-            rampX = bx + bWidth / 2 + offset;
+            rampX = bx + bWidth / 2 + offset - 0.5;
             rampZ = bz;
             rotX = tiltX;
             rotZ = angle + tiltZ;
@@ -564,8 +546,8 @@ function createRampToRoof(buildingMesh, bWidth, bDepth, bHeight, tiltX, tiltZ) {
     ramp.rotateX(rotX);
     ramp.rotateZ(rotZ);
     
-    // 경사로가 너무 깔끔하지 않게 약간 비틀기 (폐허 느낌)
-    ramp.rotateY((Math.random() - 0.5) * 0.2); 
+    // 비틀기는 유지하되 약간 줄임
+    ramp.rotateY((Math.random() - 0.5) * 0.1); 
 
     ramp.castShadow = true;
     ramp.receiveShadow = true;
@@ -574,34 +556,34 @@ function createRampToRoof(buildingMesh, bWidth, bDepth, bHeight, tiltX, tiltZ) {
     ramp.geometry.computeBoundingBox();
     ramp.userData.box = new THREE.Box3().setFromObject(ramp);
     
-    // 경사로도 밟을 수 있는 바닥으로 취급
+    // [중요] 경사로도 바닥으로 인식되게 설정
+    ramp.userData.isFloor = true;
+
     colliders.floors.push(ramp);
     scene.add(ramp);
 }
 
 /* ===============================
-   폐허 잔해 필드 (구 광장)
+   폐허 잔해 필드 (수정됨)
 ================================ */
 
 function createRuinsField(x, z) {
     const size = 20;
     
-    // 바닥에 깔린 잔해 베이스
+    // 바닥 잔해 베이스
     const baseMat = new THREE.MeshStandardMaterial({
-        color: 0x222222,
+        color: 0x444444, // 베이스도 약간 밝게
         roughness: 0.9
     });
     
-    // 듬성듬성 깨진 바닥
-    if (Math.random() > 0.5) {
+    if (Math.random() > 0.4) {
         const platform = new THREE.Mesh(
-            new THREE.BoxGeometry(size * 0.8, 1, size * 0.8),
+            new THREE.BoxGeometry(size * 0.7, 0.5, size * 0.7),
             baseMat
         );
-        platform.position.set(x, groundY + 0.5, z);
-        // 바닥이 기울어져 있음
-        platform.rotation.z = (Math.random() - 0.5) * 0.2;
-        platform.rotation.x = (Math.random() - 0.5) * 0.2;
+        platform.position.set(x, groundY + 0.25, z);
+        platform.rotation.z = (Math.random() - 0.5) * 0.1;
+        platform.rotation.x = (Math.random() - 0.5) * 0.1;
         
         platform.receiveShadow = true;
         platform.updateMatrixWorld();
@@ -613,8 +595,8 @@ function createRuinsField(x, z) {
         scene.add(platform);
     }
 
-    // 주변에 흩뿌려진 잔해들
-    createDebris(x, z, size/2, 10);
+    // [수정] 잔해 개수 증가 (10 -> 25) 및 더 넓게 퍼뜨림
+    createDebris(x, z, size * 0.6, 25);
 }
 
 /* ===============================
@@ -645,7 +627,6 @@ function updateCity(playerX, playerZ) {
                 continue;
             }
 
-            // 30% 확률로 잔해 필드, 나머지는 건물
             if (Math.random() < 0.3) {
                 createRuinsField(x, z);
             } else {
