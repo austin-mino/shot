@@ -135,16 +135,24 @@
         }
 
         const state = {
-            hp: 100, score: 0, isGameOver: false, isGameActive: false,
-            bossSpawned: false, nextBossScore: 5000,
-            bullets: [], enemies: [], obstacles: [], debris: [],
-                gunnerCount: 0, // ✅ 이 줄 추가
-cameraMode: 'TPS', 
+            hp: 100, 
+            score: 0, 
+            isGameOver: false, 
+            isGameActive: false,
+            bossSpawned: false, 
+            nextBossScore: 5000,
+            bullets: [], 
+            enemies: [], 
+            obstacles: [], 
+            debris: [],
+            gunnerCount: 0, // ✅ 이 줄 추가
+            cameraMode: 'TPS', 
+            ammo: 30,          // 현재 탄창에 남은 총알
+            maxAmmo: 30,       // 탄창 용량
+            isReloading: false, // 재장전 중인지 여부
             // 구면 좌표계 사용 (phi: 수직, theta: 수평)
             cam: { theta: Math.PI, phi: 1.4, radius: 4.5 } 
-            ammo: 30,          // 현재 탄창에 남은 총알
-    maxAmmo: 30,       // 탄창 용량
-    isReloading: false, // 재장전 중인지 여부
+        
         };
 
         const input = { w: false, a: false, s: false, d: false, space: false, joyX: 0, joyY: 0 };
@@ -1513,7 +1521,7 @@ function moveEnemyLikePlayer(enemy, targetPos, speed) {
             reloadWeapon();
         }
 
-        fireCooldown = 6; 
+        fireCooldown = 16; 
     }
     
     // 재장전 중에도 발사 버튼을 누르고 있으면 쿨타임은 돌지 않게 하거나, 
