@@ -274,6 +274,18 @@ function box(w, h, d, x, y, z) {
     return mesh;
 }
 
+        const physics = {
+    gravity: -0.8,  // 중력
+    jump: 15        // 점프력
+};
+
+// 플레이어 초기화 (velocity & grounded)
+if (!player.userData.velocity) {
+    player.userData.velocity = { x: 0, y: 0, z: 0 };
+    player.userData.isGrounded = false;
+}
+
+
 /* ===============================
    기본 설정
 ================================ */
@@ -475,79 +487,120 @@ function createBuilding(x, z) {
     createDebris(x, z, width + 4, Math.floor(Math.random() * 2) + 1);
 }
 
-// 2. 경사로 (수정: 완만하게, 두껍게)
+// 2. 경사로 (수정: 꽉 찬 쐐기형 블록 생성)
 function createRampToRoof(buildingMesh, bWidth, bDepth, bHeight) {
-    const rampWidth = 3.0; 
+    const rampWidth = 3.0; // 경사로 폭
     
-    // [핵심 수정 1] 경사 각도 완화
-    // 높이의 2.2배만큼 밑변을 잡아서 경사를 매우 완만하게 만듦 (약 25도)
-    // 이렇게 하면 점프 없이도 자연스럽게 걸어 올라갈 수 있습니다.
-    const rampBaseLen = bHeight * 2.2; 
-    const rampLen = Math.sqrt(bHeight * bHeight + rampBaseLen * rampBaseLen);
+    // 경사로 길이 (완만하게 설정: 높이의 2.2배)
+    const rampLength = bHeight * 2.2; 
 
-    // [핵심 수정 2] 경사로 두께 증가 (통과 방지)
-    // 두께(Y)를 2.0으로 늘려서 물리 레이캐스터가 뚫고 지나가는 현상 방지
-    const rampThickness = 2.0;
+    // 1️⃣ 쐐기(Wedge) 모양 생성 (Triangle shape extrusion)
+    // (0,0)에서 시작해서 삼각형을 그립니다.
+    const shape = new THREE.Shape();
+    shape.moveTo(0, 0);                 // 바닥 끝점 (뾰족한 부분)
+    shape.lineTo(rampLength, 0);        // 바닥 안쪽 (건물 벽 쪽 바닥)
+    shape.lineTo(rampLength, bHeight);  // 벽 타고 올라간 높이 (옥상 연결부)
+    shape.lineTo(0, 0);                 // 다시 시작점으로 닫기
+
+    // 2️⃣ 두께 만들기 (Extrude)
+    const extrudeSettings = {
+        steps: 1,
+        depth: rampWidth, // 경사로 폭만큼 튀어나오게 함
+        bevelEnabled: false // 모서리 둥글게 하지 않음 (칼각 유지)
+    };
     
-    const rampGeo = new THREE.BoxGeometry(rampWidth, rampThickness, rampLen); 
+    const rampGeo = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+    
+    // 재질 설정
     const rampMat = new THREE.MeshStandardMaterial({ 
         color: 0x444444, 
         roughness: 0.9,
         metalness: 0.5
     });
+    
     const ramp = new THREE.Mesh(rampGeo, rampMat);
+
+    // 3️⃣ 위치 및 회전 잡기
+    // ExtrudeGeometry는 기본적으로 Z축으로 두께가 생기고, XY평면에 모양이 생김.
+    // 이를 각 면(동서남북)에 맞춰서 돌리고 이동시켜야 함.
 
     const bx = buildingMesh.position.x;
     const bz = buildingMesh.position.z;
-    const angle = Math.asin(bHeight / rampLen);
     const side = Math.floor(Math.random() * 4);
 
-    let rampX, rampZ, rotX, rotZ;
-    // 두께가 늘어났으므로 Y위치 조정 (중심점 기준)
-    const rampY = groundY + bHeight / 2 - (rampThickness / 2 * Math.cos(angle)); 
-    const offset = (rampBaseLen / 2);
+    // geometry의 중심축을 잡기 어려우므로, 직접 좌표 계산하여 배치
+    // Extrude 결과물은 (0,0,0)이 삼각형의 뾰족한 끝점임.
 
     switch(side) {
-        case 0: // Front
-            rampX = bx;
-            rampZ = bz + bDepth / 2 + offset - 0.5;
-            rotX = -angle;
-            rotZ = 0;
+        case 0: // Front (건물 앞쪽, +Z 방향)
+            // 삼각형을 세우고, 건물 튀어나온 만큼 이동
+            ramp.rotation.y = -Math.PI / 2; // Y축 회전해서 앞으로 뻗게 함
+            ramp.position.set(
+                bx + rampWidth / 2,         // X축 중앙 정렬 (두께 절반만큼 이동)
+                groundY,                    // 바닥에 딱 붙임
+                bz + bDepth / 2 + rampLength // 건물 벽에서 길이만큼 앞으로 나와서 시작
+            );
             break;
-        case 1: // Back
-            rampX = bx;
-            rampZ = bz - bDepth / 2 - offset + 0.5;
-            rotX = angle;
-            rotZ = 0;
-            break;
-        case 2: // Left
-            rampX = bx - bWidth / 2 - offset + 0.5;
-            rampZ = bz;
-            rotX = 0;
-            rotZ = -angle;
+
+        case 1: // Back (건물 뒤쪽, -Z 방향)
             ramp.rotation.y = Math.PI / 2; 
+            ramp.position.set(
+                bx - rampWidth / 2, 
+                groundY, 
+                bz - bDepth / 2 - rampLength
+            );
             break;
-        case 3: // Right
-            rampX = bx + bWidth / 2 + offset - 0.5;
-            rampZ = bz;
-            rotX = 0;
-            rotZ = angle;
-            ramp.rotation.y = Math.PI / 2;
+
+        case 2: // Left (건물 왼쪽, -X 방향)
+            ramp.rotation.y = 0; // 회전 없음 (기본이 X축 방향)
+            ramp.position.set(
+                bx - bWidth / 2 - rampLength, 
+                groundY, 
+                bz + rampWidth / 2
+            );
+            // 기본 Shape가 오른쪽(+X)을 보고 있으므로, 뒤집어야 함? 
+            // 아니면 좌표를 반대로? -> Shape가 (0,0) -> (Len,0) 이므로 +X 방향임.
+            // 왼쪽 벽에 붙이려면 반대로 돌려야 함.
+            ramp.rotation.y = 0; 
+            // Shape가 오른쪽으로 커지므로... 
+            // 사실 Shape를 그릴 때 방향을 타는데, 단순히 오브젝트를 돌리는게 편함.
+            
+            // 왼쪽면: 180도 돌려서 붙이기? 아님.
+            // Shape: 뾰족(0,0) -> 벽(Len,0).
+            // 왼쪽 벽이면: 뾰족한게 왼쪽 멀리(-X) 있어야 함.
+            // Shape는 +X로 그려짐. -> 180도 돌리면 됨? X.
+            // 그냥 위치를 잘 잡자.
+            
+            // 다시 설정: 
+            // Left면 (-X 방향). Shape는 +X로 그려짐. -> Z축으로 180도 회전? 아님 Y축으로.
+            // 그냥 mesh를 돌리겠습니다.
+            ramp.rotation.y = 0;
+            ramp.position.set(bx - bWidth/2 - rampLength, groundY, bz + rampWidth/2);
+            // *Shape는 +X방향으로 그려짐* // 따라서 (bx - width - len) 위치에 두면 오른쪽으로 그려져서 건물 벽에 닿음.
+            break;
+
+        case 3: // Right (건물 오른쪽, +X 방향)
+            // 오른쪽 벽이면: 뾰족한게 오른쪽 멀리(+X) 있어야 함.
+            // Shape는 +X로 그려짐. -> 이걸 Y축으로 180도 돌려서 <- 모양으로 만듦
+            ramp.rotation.y = Math.PI;
+            ramp.position.set(
+                bx + bWidth / 2 + rampLength, 
+                groundY, 
+                bz - rampWidth / 2 // 180도 돌리면 Z축(두께) 방향도 반대가 됨 고려
+            );
             break;
     }
 
-    ramp.position.set(rampX, rampY, rampZ);
-    ramp.rotateX(rotX);
-    ramp.rotateZ(rotZ);
-    
+    // 그림자 설정
     ramp.castShadow = true;
     ramp.receiveShadow = true;
 
+    // 충돌 박스 업데이트
     ramp.updateMatrixWorld();
     ramp.geometry.computeBoundingBox();
     ramp.userData.box = new THREE.Box3().setFromObject(ramp);
     
-    // 바닥 판정
+    // 바닥 판정 (가장 중요)
     ramp.userData.isFloor = true;
 
     colliders.floors.push(ramp);
@@ -667,6 +720,8 @@ function updateCity(playerX, playerZ) {
             }
         });
 
+
+        
         // [핵심] 발사 (PointerDown 이벤트로 통합 - 터치패드/클릭 모두 대응)
        document.addEventListener('pointerdown', () => {
     if (state.isGameActive || isMobile) isFiring = true;
@@ -730,66 +785,85 @@ document.getElementById('btn-fire').addEventListener('touchend', e=>{
         // ===== 바닥 감지 (경사 / 오르막 / 내리막 대응) =====
 const groundRay = new THREE.Raycaster();
 const down = new THREE.Vector3(0, -1, 0);
-
 function updateGround(player) {
-    const footHeight = 1.6;
+    // 1. 점프 상승 중일 때는 바닥 보정을 하지 않음
+    if (player.userData.velocity.y > 0) return;
 
-    // 🔑 발 위치에서 시작
-    const origin = player.position.clone();
-    origin.y -= footHeight - 0.05;
+    const raycaster = new THREE.Raycaster();
+    
+    const rayOrigin = player.position.clone();
+    rayOrigin.y += 1.5; 
+    
+    raycaster.set(rayOrigin, new THREE.Vector3(0, -1, 0));
 
-    groundRay.set(origin, down);
-
-    const hits = groundRay.intersectObjects(
-        colliders.floors.filter(f => f.userData.isFloor),
-        false
-    );
+    const hits = raycaster.intersectObjects(colliders.floors, false);
 
     if (hits.length > 0) {
         const hit = hits[0];
-
-        if (hit.distance <= 0.25 && player.userData.velocity.y <= 0) {
-            player.position.y = hit.point.y + footHeight;
-            player.userData.velocity.y = 0;
+        if (hit.distance < 2.0) {
+            player.position.y = hit.point.y; 
+            player.userData.velocity.y = 0;  
             player.userData.isGrounded = true;
             return;
         }
     }
-    player.userData.isGrounded = false;
 
-    // 🛑 최후 안전장치
-if (player.position.y < groundY - 5) {
-    player.position.y = groundY + 2;
-    player.userData.velocity.y = 0;
+    if (player.position.y <= groundY) {
+        player.position.y = groundY;
+        player.userData.velocity.y = 0;
+        player.userData.isGrounded = true;
+    } else {
+        player.userData.isGrounded = false;
+    }
 }
 
-}
 
-       function updateEnemyGround(enemy) {
-    const footHeight = 1.6;
+      function updateEnemyGround(enemy) {
+    const footHeight = 1.6; // 적 모델의 중심(허리)에서 발바닥까지의 거리
+    const rayStartOffset = 1.0; // 머리 위에서 쏘기 위한 여유분
 
+    // 1. 레이저 시작점: 적의 위치보다 '위'에서 시작
+    // (발바닥에서 쏘면 바닥에 조금만 파묻혀도 감지를 못함)
     const origin = enemy.position.clone();
-    origin.y -= footHeight - 0.05;
+    origin.y += rayStartOffset; 
 
-    groundRay.set(origin, down);
+    // 2. 아래로 발사
+    // (전역변수 groundRay가 없다면 'new THREE.Raycaster()' 사용)
+    groundRay.set(origin, new THREE.Vector3(0, -1, 0));
 
-    const hits = groundRay.intersectObjects(
-        colliders.floors.filter(f => f.userData.isFloor),
-        false
-    );
+    // 3. 바닥 충돌 검사
+    // (filter는 성능을 먹으니 colliders.floors를 그대로 사용 권장)
+    const hits = groundRay.intersectObjects(colliders.floors, false);
 
     if (hits.length > 0) {
         const hit = hits[0];
 
-        if (hit.distance <= 0.25 && enemy.userData.velocity.y <= 0) {
+        // 4. 거리 계산 및 스냅(Snap) 판정
+        // 이상적인 거리 = rayStartOffset(1.0) + footHeight(1.6) = 2.6
+        // 경사로 오차를 고려해 약간의 여유(+0.5)를 둠
+        const snapThreshold = rayStartOffset + footHeight + 0.5;
+
+        // 거리가 범위 내에 있고, 위로 점프 중이 아니라면 바닥에 붙임
+        if (hit.distance <= snapThreshold && enemy.userData.velocity.y <= 0) {
+            
+            // [핵심] 적의 Y 위치 = 바닥 높이 + 다리 길이
             enemy.position.y = hit.point.y + footHeight;
+            
             enemy.userData.velocity.y = 0;
             enemy.userData.isGrounded = true;
             return;
         }
     }
 
+    // 바닥 감지 안됨 -> 공중 상태
     enemy.userData.isGrounded = false;
+
+    // [안전장치] 혹시라도 맵 뚫고 떨어지면 기본 땅 위로 복구
+    if (enemy.position.y < groundY + footHeight) {
+        enemy.position.y = groundY + footHeight;
+        enemy.userData.velocity.y = 0;
+        enemy.userData.isGrounded = true;
+    }
 }
 
 
