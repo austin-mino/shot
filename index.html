@@ -1422,7 +1422,63 @@ function moveEnemyLikePlayer(enemy, targetPos, speed) {
     if (!player.userData.isGrounded) updateGround(player);
 
     // 3. 플레이어 총알 연사
-    if (isFiring && fireCooldown <= 0) { fireBullet(); fireCooldown = 6; }
+    // 3. 플레이어 총알 연사 (레이캐스팅 정밀 사격 + 벽 막힘 방지)
+    if (isFiring && fireCooldown <= 0) { 
+        // (1) 화면 정중앙(크로스헤어)이 무엇을 가리키는지 확인
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+
+        // 부딪히는 모든 것(벽, 바닥, 적) 검사
+        // colliders.walls(벽), colliders.floors(바닥), state.enemies(적) 모두 포함
+        const targetObjects = [...colliders.walls, ...colliders.floors];
+        state.enemies.forEach(e => targetObjects.push(e));
+        if(boss) targetObjects.push(boss);
+
+        const hits = raycaster.intersectObjects(targetObjects, false); // 자식까지 검사하려면 true, 성능 위해 false 권장 (적은 박스만 체크 등)
+        
+        // 목표 지점 계산 (맞은게 있으면 그곳, 없으면 허공 멀리)
+        let targetPoint;
+        if (hits.length > 0) {
+            targetPoint = hits[0].point;
+        } else {
+            // 허공을 쏘면 카메라 앞 100미터 지점
+            targetPoint = raycaster.ray.origin.clone().add(raycaster.ray.direction.multiplyScalar(100));
+        }
+
+        // (2) 총알 시작 위치 결정 (오른손잡이 느낌)
+        // 카메라 위치에서 시작하되, 오른쪽(Right) 아래(Down) 앞(Forward)으로 살짝 이동
+        const spawnPos = camera.position.clone();
+        
+        // 카메라 기준 방향 벡터
+        const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+        const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+        const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+
+        // 기본 총구 위치: 오른쪽 0.5, 아래 0.3, 앞 0.5 (오른쪽 어깨 견착 느낌)
+        // TPS 모드일 때는 플레이어 몸에서 나가는 것처럼 조정
+        if (!isMobile) { 
+             spawnPos.add(right.multiplyScalar(0.4)).add(up.multiplyScalar(-0.2)).add(forward.multiplyScalar(0.5));
+        } else {
+             // 모바일(Top View) 등에서는 플레이어 몸통 중심에서 발사
+             spawnPos.copy(player.position).add(new THREE.Vector3(0, 1.5, 0)).add(forward.multiplyScalar(0.5));
+        }
+
+        // (3) [핵심] 벽에 너무 가까워서 총구가 파묻히는지 검사
+        // 카메라와 목표지점 사이의 거리가 너무 가까우면(벽에 붙음), 총알을 카메라 바로 앞에서 생성
+        if (hits.length > 0 && hits[0].distance < 1.0) {
+            // 벽에 얼굴을 대고 쏘는 경우 -> 카메라 위치에서 바로 발사 (뚫림 방지)
+            spawnPos.copy(camera.position).add(forward.multiplyScalar(0.2)); 
+        }
+
+        // (4) 발사 방향 계산 (시작점 -> 목표점)
+        const fireDir = new THREE.Vector3().subVectors(targetPoint, spawnPos).normalize();
+
+        // (5) 발사 함수 호출 (속도 2.5로 빠르게)
+        fireBullet(false, spawnPos, fireDir, 2.5);
+
+        fireCooldown = 6; // 연사 속도
+    }
+    
     if (fireCooldown > 0) fireCooldown--;
 
     // 4. 카메라 업데이트
