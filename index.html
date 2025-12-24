@@ -140,7 +140,7 @@
             isGameOver: false, 
             isGameActive: false,
             bossSpawned: false, 
-            nextBossScore: 5000,
+            nextBossScore: 3000,
             bullets: [], 
             enemies: [], 
             obstacles: [], 
@@ -1822,7 +1822,7 @@ updateGround(player);
     }
 
     // 9. 적/보스 스폰 & AI
-    if(state.score>=state.nextBossScore && !state.bossSpawned){ spawnBoss(); state.nextBossScore+=5000; }
+    if(state.score>=state.nextBossScore && !state.bossSpawned){ spawnBoss(); state.nextBossScore+=3000; }
    if (!boss && state.enemies.length < 16 && Math.random() < 0.03) {
   // 적 생성 후
 const e = createDetailedHumanoid(0xff4444, false); // 일반 적 빨강
@@ -1830,7 +1830,7 @@ e.userData.boxSize = new THREE.Vector3(0.8, 1.8, 0.8);
 
 // Gunner 여부 설정 (랜덤 또는 원하는 기준)
 e.userData.shootCooldown = Math.random() * 1.5; // 초기값 랜덤
-e.userData.isGunner = Math.random() < 0.3; // 30% 확률로 Gunner
+e.userData.isGunner = Math.random() < 0.2; // 20% 확률로 Gunner
 
 // Gunner 색상 변경
 if (e.userData.isGunner) {
@@ -1870,7 +1870,7 @@ if (spawnEnemySafely(e, player.position)) {
             if(e.userData.shootCooldown<=0){
                 const dir=new THREE.Vector3().subVectors(player.position,e.position).normalize();
                 fireBullet(true,e.position.clone().add(new THREE.Vector3(0,1.6,0)),dir);
-                e.userData.shootCooldown=4;
+                e.userData.shootCooldown=5;
             }
         }
 
