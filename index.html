@@ -150,6 +150,8 @@
             ammo: 30,          // 현재 탄창에 남은 총알
             maxAmmo: 30,       // 탄창 용량
             isReloading: false, // 재장전 중인지 여부
+            currentWeapon: 'rifle', // 'rifle' 또는 'knife'
+            isSwinging: false,      // 칼 휘두르는 중인지 확인 (연타 방지)
             // 구면 좌표계 사용 (phi: 수직, theta: 수평)
             cam: { theta: Math.PI, phi: 1.4, radius: 4.5 } 
         
@@ -157,6 +159,56 @@
 
         const input = { w: false, a: false, s: false, d: false, space: false, joyX: 0, joyY: 0 };
         const physics = { gravity: -0.018, jump: 0.45 };
+
+
+// [추가] 광선검 생성 및 플레이어 오른팔에 부착 함수
+function attachWeaponsToPlayer() {
+    // 1. 플레이어의 오른팔 찾기 (createDetailedHumanoid 구조 기준)
+    const rightArm = player.userData.rArm.root; 
+
+    // --- (1) 기존 총기 모델이 있다면 찾아서 태그 달기 ---
+    // (만약 기존 코드에 총 모델이 따로 없다면, 간단히 박스로 총을 만들어서 붙여도 됩니다.
+    //  여기서는 기존에 총을 쏘던 손을 '소총 모드'로 가정합니다.)
+    
+    // --- (2) 근접 무기 (광선검) 생성 ---
+    const hiltGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.3, 8);
+    const hiltMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
+    const hilt = new THREE.Mesh(hiltGeo, hiltMat);
+    
+    // 칼날 (빛나는 네온)
+    const bladeGeo = new THREE.BoxGeometry(0.1, 1.2, 0.05);
+    const bladeMat = new THREE.MeshStandardMaterial({ 
+        color: 0x00ffff, 
+        emissive: 0x00ffff, 
+        emissiveIntensity: 2.0 
+    });
+    const blade = new THREE.Mesh(bladeGeo, bladeMat);
+    blade.position.y = 0.75; // 손잡이 위로
+
+    // 무기 그룹
+    const knifeGroup = new THREE.Group();
+    knifeGroup.add(hilt);
+    knifeGroup.add(blade);
+
+    // 위치 잡기 (손에 쥐어주기)
+    knifeGroup.position.set(0, -0.2, 0.3); // 손 위치에 맞게 조정
+    knifeGroup.rotation.x = Math.PI / 2;   // 앞으로 뻗게
+    
+    // 처음엔 숨김
+    knifeGroup.visible = false; 
+    
+    // 참조 저장
+    player.userData.knife = knifeGroup; 
+    
+    // 오른팔에 부착
+    rightArm.add(knifeGroup);
+}
+
+// [중요] 게임 초기화 부분(createGround 등 호출하는 곳)에서 이 함수를 한번 호출해야 합니다!
+// 예: createPlayer() 호출 직후
+// attachWeaponsToPlayer(); <-- 이 줄을 init 부분에 넣으세요.
+
+        
         function reloadWeapon() {
     // 이미 재장전 중이거나, 총알이 꽉 차있으면 무시
     if (state.isReloading || state.ammo === state.maxAmmo) return;
@@ -818,12 +870,43 @@ document.addEventListener('pointerup', () => {
         window.addEventListener('keydown', e => {
     const k = e.key.toLowerCase();
     if (k === 'f') isFiring = true;
+            // [추가] R키로 무기 교체
+    if (e.code === 'KeyR') {
+        switchWeapon();
+    }
 });
 
 window.addEventListener('keyup', e => {
     const k = e.key.toLowerCase();
     if (k === 'f') isFiring = false;
 });
+
+        // [추가] 무기 교체 함수
+function switchWeapon() {
+    // 재장전 중이거나 공격 중이면 교체 불가
+    if (state.isReloading || state.isSwinging) return;
+
+    if (state.currentWeapon === 'rifle') {
+        state.currentWeapon = 'knife';
+        
+        // UI 업데이트 (선택 사항)
+        console.log("Switched to KNIFE");
+        // 총 UI 숨기고 칼 UI 보이기 등의 로직 추가 가능
+        
+        // 모델 가시성 변경
+        if (player.userData.knife) player.userData.knife.visible = true;
+        // 총 모델이 있다면 숨김 처리: if (player.userData.rifle) player.userData.rifle.visible = false;
+
+    } else {
+        state.currentWeapon = 'rifle';
+        
+        console.log("Switched to RIFLE");
+        
+        // 모델 가시성 변경
+        if (player.userData.knife) player.userData.knife.visible = false;
+        // 총 모델 보이기: if (player.userData.rifle) player.userData.rifle.visible = true;
+    }
+}
 
 
 
@@ -1448,6 +1531,98 @@ function moveEnemyLikePlayer(enemy, targetPos, speed) {
     enemy.lookAt(targetPos.x, enemy.position.y, targetPos.z);
 }
 
+        // [추가] 근접 공격 함수
+function meleeAttack() {
+    state.isSwinging = true;
+
+    // 1. 휘두르는 애니메이션 (간단히 팔 회전)
+    // GSAP 같은 라이브러리가 없으므로 setTimeout으로 구현
+    const rightArm = player.userData.rArm.root;
+    const initialRot = rightArm.rotation.x;
+    
+    // 내려치기 동작
+    rightArm.rotation.x = -Math.PI / 2; // 팔을 든다
+    
+    setTimeout(() => {
+        rightArm.rotation.x = 0.5; // 힘껏 내리친다 (탁!)
+        
+        // 2. 타격 판정 (내리치는 순간)
+        checkMeleeHit();
+        
+    }, 100);
+
+    // 복귀
+    setTimeout(() => {
+        rightArm.rotation.x = initialRot; // 원위치
+        state.isSwinging = false; // 공격 종료 (다시 공격 가능)
+    }, 400); // 0.4초 딜레이 (공격 속도)
+}
+
+// [추가] 근접 타격 판정 (범위 공격)
+function checkMeleeHit() {
+    const attackRange = 2.5; // 사거리 (2.5m)
+    const damage = 50;       // 데미지 (총보다 강력하게)
+
+    // 플레이어 앞쪽 방향
+    const playerDir = new THREE.Vector3(0, 0, 1).applyQuaternion(player.quaternion);
+
+    // 모든 적 검사
+    const targets = [...state.enemies];
+    if (boss) targets.push(boss);
+
+    targets.forEach(enemy => {
+        const dist = player.position.distanceTo(enemy.position);
+
+        // 1. 사거리 안에 있는가?
+        if (dist <= attackRange) {
+            
+            // 2. 내 앞에 있는가? (뒤에 있는 적은 안 맞음)
+            // 플레이어에서 적을 향하는 벡터
+            const dirToEnemy = new THREE.Vector3().subVectors(enemy.position, player.position).normalize();
+            // 내적(Dot Product)을 이용해 각도 계산 (0.5 이상이면 대략 전방 60도)
+            const angle = playerDir.dot(dirToEnemy);
+
+            if (angle > 0.5) { 
+                // 타격 성공!
+                hitEnemy(enemy, damage);
+            }
+        }
+    });
+}
+
+// [추가] 적 피격 처리 (총/칼 공통으로 쓰면 좋음)
+function hitEnemy(enemy, damage) {
+    // 1. 이펙트 생성 (파편)
+    spawnDebris(enemy.position, 0x00ffff); // 칼 맞으면 청록색 파편
+
+    // 2. 일반 적 처리
+    if (enemy !== boss) {
+        state.score += 100;
+        // 한방에 죽거나 체력 시스템 적용 가능
+        // 여기서는 칼 데미지가 50이니 2방컷, 혹은 즉사 처리
+        
+        // 배열에서 제거
+        const idx = state.enemies.indexOf(enemy);
+        if (idx > -1) {
+            state.enemies.splice(idx, 1);
+            scene.remove(enemy);
+            if (enemy.userData.isGunner) state.gunnerCount--;
+        }
+    } 
+    // 3. 보스 처리
+    else {
+        boss.userData.hp -= damage;
+        document.getElementById('boss-hp-fill').style.width = (boss.userData.hp / boss.userData.maxHp * 100) + '%';
+        
+        if (boss.userData.hp <= 0) {
+            scene.remove(boss);
+            state.hp = Math.min(state.hp + 20, 100);
+            boss = null;
+            state.bossSpawned = false;
+            document.getElementById('boss-ui').style.display = 'none';
+        }
+    }
+}
         
     function animate() {
     requestAnimationFrame(animate);
@@ -1465,69 +1640,61 @@ function moveEnemyLikePlayer(enemy, targetPos, speed) {
     updateCity(player.position.x, player.position.z);
     if (!player.userData.isGrounded) updateGround(player);
 
-  // 3. 플레이어 총알 연사 (탄약 시스템 적용)
-    // [조건 추가] 재장전 중이 아니고(!state.isReloading), 총알이 있어야 함(state.ammo > 0)
-    if (isFiring && fireCooldown <= 0 && !state.isReloading && state.ammo > 0) { 
+ // 3. 공격 시스템 (총 or 칼)
+    if (isFiring) {
         
-        // --- (기존 레이캐스팅 조준 로직 시작) ---
-        const raycaster = new THREE.Raycaster();
-        raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+        // (A) 소총 모드일 때
+        if (state.currentWeapon === 'rifle') {
+            if (fireCooldown <= 0 && !state.isReloading && state.ammo > 0) {
+                // ... [기존의 총 쏘는 코드 그대로 유지] ...
+                // (아까 작성해드린 Raycaster 총 쏘는 코드 전체가 여기 들어갑니다)
+                
+                // (요약: 조준 -> Raycaster -> fireBullet -> ammo--)
+                const raycaster = new THREE.Raycaster();
+                raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+                const targetObjects = [...colliders.walls, ...colliders.floors, ...state.enemies];
+                if(boss) targetObjects.push(boss);
+                const hits = raycaster.intersectObjects(targetObjects, false);
+                
+                let targetPoint = hits.length > 0 ? hits[0].point : raycaster.ray.origin.clone().add(raycaster.ray.direction.multiplyScalar(100));
+                
+                let spawnPos = camera.position.clone();
+                if (!isMobile) { 
+                     const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                     const rgt = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+                     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+                     spawnPos.add(rgt.multiplyScalar(0.4)).add(up.multiplyScalar(-0.2)).add(fwd.multiplyScalar(0.5));
+                } else {
+                     spawnPos.copy(player.position).add(new THREE.Vector3(0, 1.5, 0));
+                }
+                
+                // 안전 검사
+                const c2s = new THREE.Vector3().subVectors(spawnPos, camera.position);
+                const sRay = new THREE.Raycaster(camera.position, c2s.normalize());
+                const sHits = sRay.intersectObjects([...colliders.walls, ...colliders.floors], false);
+                if ((sHits.length > 0 && sHits[0].distance < c2s.length()) || (hits.length > 0 && hits[0].distance < 2.5)) {
+                    spawnPos.copy(camera.position).add(new THREE.Vector3(0,0,-1).applyQuaternion(camera.quaternion).multiplyScalar(0.5));
+                }
 
-        const targetObjects = [...colliders.walls, ...colliders.floors];
-        state.enemies.forEach(e => targetObjects.push(e));
-        if(boss) targetObjects.push(boss);
+                const dir = new THREE.Vector3().subVectors(targetPoint, spawnPos).normalize();
+                fireBullet(false, spawnPos, dir, 2.5);
 
-        const hits = raycaster.intersectObjects(targetObjects, false);
-        
-        let targetPoint;
-        if (hits.length > 0) {
-            targetPoint = hits[0].point;
-        } else {
-            targetPoint = raycaster.ray.origin.clone().add(raycaster.ray.direction.multiplyScalar(100));
+                state.ammo--;
+                updateAmmoUI();
+                if (state.ammo <= 0) reloadWeapon();
+                fireCooldown = 15; 
+            }
+        } 
+        // (B) 근접 무기(칼) 모드일 때
+        else if (state.currentWeapon === 'knife') {
+            // 쿨타임 대신 isSwinging 플래그 사용 (공격 속도 제한)
+            if (!state.isSwinging) {
+                meleeAttack(); // 칼 휘두르기 함수 호출
+            }
         }
-
-        let spawnPos = camera.position.clone();
-        
-        if (!isMobile) { 
-             const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-             const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-             const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
-             spawnPos.add(right.multiplyScalar(0.4)).add(up.multiplyScalar(-0.2)).add(forward.multiplyScalar(0.5));
-        } else {
-             spawnPos.copy(player.position).add(new THREE.Vector3(0, 1.5, 0));
-        }
-
-        const camToSpawn = new THREE.Vector3().subVectors(spawnPos, camera.position);
-        const distToSpawn = camToSpawn.length();
-        const safetyRay = new THREE.Raycaster(camera.position, camToSpawn.normalize());
-        const safetyHits = safetyRay.intersectObjects([...colliders.walls, ...colliders.floors], false);
-
-        if ((safetyHits.length > 0 && safetyHits[0].distance < distToSpawn) || 
-            (hits.length > 0 && hits[0].distance < 2.5)) {
-            const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-            spawnPos.copy(camera.position).add(forward.multiplyScalar(0.5)); 
-        }
-
-        const fireDir = new THREE.Vector3().subVectors(targetPoint, spawnPos).normalize();
-        fireBullet(false, spawnPos, fireDir, 2.5);
-        // --- (기존 조준 로직 끝) ---
-
-        // [탄약 감소 로직]
-        state.ammo--; // 총알 1발 감소
-        updateAmmoUI(); // UI 갱신
-
-        // [자동 재장전] 총알을 다 썼으면
-        if (state.ammo <= 0) {
-            reloadWeapon();
-        }
-
-        fireCooldown = 14; 
     }
     
-    // 재장전 중에도 발사 버튼을 누르고 있으면 쿨타임은 돌지 않게 하거나, 
-    // 그냥 둬도 isReloading 체크 때문에 발사는 안됨.
     if (fireCooldown > 0) fireCooldown--;
-
         
     // 4. 카메라 업데이트
     const targetPos = player.position.clone().add(new THREE.Vector3(0, 1.6, 0));
