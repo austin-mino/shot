@@ -667,7 +667,7 @@ function createBuilding(x, z) {
 // 2. 경사로 (수정: 벡터 연결 방식 + 원래 함수 이름)
 function createRampToRoof(buildingMesh, bWidth, bDepth, bHeight) {
     const rampWidth = 4.0;  // 걷기 편하게 폭을 넓힘
-    const rampThickness = 1; // 두께 (물리 뚫림 방지)
+    const rampThickness = 1.1; // 두께 (물리 뚫림 방지)
 
     // [호환성 수정] buildingMesh에서 좌표 추출
     const bx = buildingMesh.position.x;
@@ -717,7 +717,7 @@ function createRampToRoof(buildingMesh, bWidth, bDepth, bHeight) {
 
     // 3. 메쉬 생성
     // BoxGeometry의 Z축을 길이로 사용
-    const rampGeo = new THREE.BoxGeometry(rampWidth, rampThickness, rampLen);
+    const rampGeo = new THREE.BoxGeometry(rampWidth, rampThickness + 0.1, rampLen);
     const rampMat = new THREE.MeshStandardMaterial({ 
         color: 0x555555, 
         roughness: 0.9, 
