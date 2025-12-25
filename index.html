@@ -971,7 +971,7 @@ function updateGround(player) {
 
     if (hits.length > 0) {
         const hit = hits[0];
-        if (hit.distance < 1.6) {
+        if (hit.distance < 0.96) {
             player.position.y = hit.point.y; 
             player.userData.velocity.y = 0;  
             player.userData.isGrounded = true;
