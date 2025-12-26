@@ -1324,10 +1324,14 @@ function spawnPlayerSafely(player, maxTries = 30) {
     return false;
 }
 
-       function spawnEnemySafely(enemy, center, maxTries = 40) {
+     // [최종] 적 안전 스폰 함수 (충돌 박스 정밀 검사 + 자동 등록)
+function spawnEnemySafely(enemy) {
+    const center = player.position; // 플레이어 주변에 스폰
+    const maxTries = 20;            // 시도 횟수
+    const spawnRadius = 60;         // 스폰 반경
+    const minWallDistance = 2.5;    // 벽과 떨어져야 하는 거리
+
     const raycaster = new THREE.Raycaster();
-    const spawnRadius = 60;
-    const minWallDistance = 2.2;
 
     for (let i = 0; i < maxTries; i++) {
 
@@ -1335,9 +1339,14 @@ function spawnPlayerSafely(player, maxTries = 30) {
         const x = center.x + (Math.random() - 0.5) * spawnRadius;
         const z = center.z + (Math.random() - 0.5) * spawnRadius;
 
+        // 맵 범위 체크 (너무 멀리 가면 안됨)
+        if (x < -MAP_HALF + 5 || x > MAP_HALF - 5 || z < -MAP_HALF + 5 || z > MAP_HALF - 5) {
+            continue;
+        }
+
         // 2️⃣ 위에서 아래로 바닥 탐색
         raycaster.set(
-            new THREE.Vector3(x, groundY + 120, z),
+            new THREE.Vector3(x, groundY + 100, z),
             new THREE.Vector3(0, -1, 0)
         );
 
@@ -1347,62 +1356,75 @@ function spawnPlayerSafely(player, maxTries = 30) {
         // 바닥의 높이(y) 가져오기
         const y = hits[0].point.y;
 
-        // [핵심] 높이가 땅바닥(groundY)과 다르면(즉, 잔해 위나 옥상이면) 스폰 포기
-        if (Math.abs(y - groundY) > 0.1) {
+        // [조건] 땅바닥(groundY) 위에만 스폰 (건물 옥상이나 잔해 위 방지)
+        // 오차 범위 0.5 정도로 넉넉하게
+        if (Math.abs(y - groundY) > 0.5) {
             continue; 
         }
 
-        const candidate = new THREE.Vector3(x, y + 2, z);
+        const candidate = new THREE.Vector3(x, y, z); // 발 위치 기준
 
         // 3️⃣ 벽(건물 본체)과 거리 검사
         let blocked = false;
+        
+        // (1) 벽 검사
         for (const wall of colliders.walls) {
-            if (!wall.userData.box) continue;
+            // 박스가 없으면 계산해서 만듦
+            if (!wall.userData.box) {
+                wall.geometry.computeBoundingBox();
+                wall.userData.box = new THREE.Box3().setFromObject(wall);
+            }
+            
+            // 월드 좌표 기준 박스 복사
+            const wallBox = wall.userData.box.clone();
+            wallBox.applyMatrix4(wall.matrixWorld);
 
-            wall.userData.box.copy(wall.geometry.boundingBox)
-                .applyMatrix4(wall.matrixWorld);
-
-            if (wall.userData.box.distanceToPoint(candidate) < minWallDistance) {
+            // 벽과 너무 가까우면 실패
+            // distanceToPoint: 점과 박스 사이의 최단 거리
+            if (wallBox.distanceToPoint(candidate) < minWallDistance) {
                 blocked = true;
                 break;
             }
         }
-
         if (blocked) continue;
 
-        // [추가] 바닥에 있는 잔해(작은 박스들) '속'에 생성되는 것 방지
+        // (2) 다른 장애물(잔해) 검사
         for (const floorObj of colliders.floors) {
-            // 진짜 땅바닥(ground)은 제외
-            if (floorObj === colliders.floors[0]) continue; 
+            if (floorObj === colliders.floors[0]) continue; // 땅은 제외
 
             if (!floorObj.userData.box) {
                 floorObj.geometry.computeBoundingBox();
                 floorObj.userData.box = new THREE.Box3().setFromObject(floorObj);
             }
             
-            // 잔해 박스 위치 업데이트
             const debrisBox = floorObj.userData.box.clone();
             debrisBox.applyMatrix4(floorObj.matrixWorld);
 
-            // 잔해와 겹치면 blocked 처리
             if (debrisBox.distanceToPoint(candidate) < minWallDistance) {
                 blocked = true;
                 break;
             }
         }
-
         if (blocked) continue;
 
-        // 4️⃣ 성공
+        // 4️⃣ 성공! 위치 확정 및 소환
         enemy.position.copy(candidate);
+        
+        // 물리 초기화
+        if(!enemy.userData.velocity) enemy.userData.velocity = new THREE.Vector3();
         enemy.userData.velocity.y = 0;
+
+        // [중요] 여기서 씬에 추가해줍니다.
+        scene.add(enemy);
+        state.enemies.push(enemy);
+        
         return true;
     }
 
-    console.warn("적 안전 스폰 실패");
+    // 실패 시 (로그만 남기고 소환 안 함)
+    // console.warn("스폰 자리 못 찾음");
     return false;
 }
-
 // 플레이어 벽 충돌 감지 (Raycaster 버전 - 회전된 경사로 정밀 감지)
 function playerIntersectsWall(pos) {
     // 플레이어의 허리 높이 (바닥에서 약간 위)
