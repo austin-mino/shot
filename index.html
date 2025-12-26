@@ -1186,26 +1186,29 @@ function applyBossAppearance(boss) {
     }
 }
 
-// [최종 수정] 보스 소환 (크기 1.5배 + 판정 박스 수정)
+// [최종 통합] 보스 소환 함수
+// 기능: 잡몹 제거 -> 5초 경고 -> 3배 크기 보스 등판 -> 타입별 밸런스 적용
 function spawnBoss() {
+    // 1. 상태 설정: 보스 스폰 시작 & 경고 모드 ON (잡몹 스폰 차단)
     state.bossSpawned = true; 
     state.isBossWarning = true; 
 
-    // 1. [1차 청소]
+    // 2. [1차 청소] 경고 시작 즉시 기존 적 제거 (점수 획득 없음)
     state.enemies.forEach(enemy => scene.remove(enemy));
     state.enemies = [];
     state.gunnerCount = 0;
 
-    // 2. 위치 계산
+    // 3. 소환 위치 계산 (플레이어 전방 30m)
     const spawnDist = 30; 
     const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion).normalize();
     const spawnPos = player.position.clone().add(direction.multiplyScalar(spawnDist));
     
+    // 맵 밖으로 나가지 않게 보정
     spawnPos.x = Math.max(-MAP_HALF + 20, Math.min(MAP_HALF - 20, spawnPos.x));
     spawnPos.z = Math.max(-MAP_HALF + 20, Math.min(MAP_HALF - 20, spawnPos.z));
     spawnPos.y = groundY; 
 
-    // 마커 생성
+    // 4. 붉은색 경고 기둥 생성
     const markerGeo = new THREE.CylinderGeometry(8, 8, 100, 32); 
     const markerMat = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
     const marker = new THREE.Mesh(markerGeo, markerMat);
@@ -1213,6 +1216,7 @@ function spawnBoss() {
     marker.position.y += 50; 
     scene.add(marker);
 
+    // 경고 메시지 표시
     const bossMsg = document.getElementById('boss-msg');
     if(bossMsg) {
         bossMsg.innerText = "⚠ WARNING: OMEGA CLASS HOSTILE DETECTED ⚠";
@@ -1220,47 +1224,50 @@ function spawnBoss() {
         bossMsg.style.color = '#ff0000';
     }
 
-    // 3. 5초 대기
+    // 5. 5초간 대기 (긴장감 조성 + 스폰 차단 유지)
     setTimeout(() => {
+        // 마커 및 메시지 삭제
         scene.remove(marker);
         if(bossMsg) bossMsg.style.display = 'none';
 
-        // 4. [2차 청소]
+        // 6. [2차 청소] 5초 사이에 혹시라도 생긴 적 완전 제거
         state.enemies.forEach(enemy => scene.remove(enemy));
         state.enemies = [];
         state.gunnerCount = 0;
 
-        // 5. 보스 생성
+        // 7. 보스 타입 랜덤 결정
         const bossType = Math.random() < 0.33 ? 'tank' : Math.random() < 0.5 ? 'rush' : 'summoner';
+        
+        // 보스 메쉬 생성
         boss = createDetailedHumanoid(0xffffff, true); 
         
-        // ▼▼▼ [여기가 바뀐 부분입니다!] ▼▼▼
-        const scale = 3; // 크기 4.0 -> 1.5배로 축소
+        // ===============================================
+        // [설정 구역] 크기, 히트박스, 데미지 밸런스
+        // ===============================================
+
+        // (1) 크기 3배 설정
+        const scale = 3.0; 
         boss.scale.set(scale, scale, scale); 
         
-        // 덩치가 작아졌으니 충돌 박스도 작게 수정 (안 그러면 투명 벽에 막힘)
-        // 기존 (3.0, 7.5, 3.0) -> 축소 (1.2, 3.0, 1.2)
-        boss.userData.boxSize = new THREE.Vector3(1.3, 3.6, 1.3);
-        
-       // ▼▼▼ [수정] 보스 타입별 체력/데미지 밸런스 조정 ▼▼▼
+        // (2) 덩치에 맞는 충돌 박스 (높이 6m, 폭 2.2m)
+        boss.userData.boxSize = new THREE.Vector3(2.2, 6.0, 2.2);
+
+        // (3) 타입별 능력치 밸런스 패치
         let setHp = 3000;
         let setDmg = 30;
 
-        // 보스 타입 확인
-        const type = boss.userData.type || bossType; // 안전하게 가져오기
-
-        if (type === 'rush') { 
-            // [하늘색 Rush] 빠르니까 체력/데미지 낮춤 (너프)
+        if (bossType === 'rush') { 
+            // [하늘색 Rush] 빠르고 끈질김 -> 데미지와 체력을 낮춰서 밸런스 조절
             setHp = 2000; 
-            setDmg = 10;  // ★ 15로 감소 (덜 아픔)
-        } else if (type === 'tank') {
-            // [검은색 Tank] 느리니까 체력/데미지 높임
+            setDmg = 15;  // (너프) 덜 아픔
+        } else if (bossType === 'tank') {
+            // [검은색 Tank] 느리고 둔함 -> 한 방이 강력하고 튼튼함
             setHp = 4000;
-            setDmg = 36;  // ★ 45로 증가 (아픔)
+            setDmg = 45;  // (버프) 매우 아픔
         } else {
-            // [보라색 Summoner] 중간 밸런스
+            // [보라색 Summoner] 평균 밸런스
             setHp = 2500;
-            setDmg = 20;
+            setDmg = 25;
         }
 
         // 결정된 능력치 적용
@@ -1268,23 +1275,22 @@ function spawnBoss() {
         boss.userData.hp = setHp;
         boss.userData.meleeDamage = setDmg; 
 
+        // (4) 사거리 설정 (팔이 길어졌으므로 5.5m로 증가)
+        boss.userData.meleeRange = 5.5; 
+
+        // 기타 속성 초기화
         boss.userData.isGunner = false;
         boss.userData.phase = 1;
         boss.userData.lastPhase = 1;
-        boss.userData.type = type;
-        
+        boss.userData.type = bossType;
         boss.userData.attackTimer = 0;
-        
-        // [주의] 보스 크기에 따라 사거리 조절 필요
-        // 크기 1.5배 -> 사거리 2.5
-        // 크기 3.0배 -> 사거리 5.5
-        boss.userData.meleeRange = 2.5; 
-        
         boss.userData.meleeCooldown = 0;
-        boss.userData.isFallingEntry = true;
+        boss.userData.isFallingEntry = true; // 낙하 모드 시작
+
+        // 8. 외형(재질/색상) 적용
         applyBossAppearance(boss);
 
-        // 코어 장착
+        // 9. 코어(가슴 구슬) 장착
         const coreGeo = new THREE.SphereGeometry(0.3, 16, 16);
         const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff }); 
         const core = new THREE.Mesh(coreGeo, coreMat);
@@ -1292,28 +1298,32 @@ function spawnBoss() {
         boss.add(core); 
         boss.userData.core = core; 
         
+        // 코어 색상까지 포함해서 외형 재적용
         applyBossAppearance(boss);
 
-        // 낙하 위치 (작아졌으니 너무 높지 않게 조정)
+        // 10. 낙하 시작 위치 설정 (머리 위 50m)
         boss.position.copy(spawnPos);
-        boss.position.y += 40; // 60 -> 40
+        boss.position.y += 50; 
 
         if (!boss.userData.velocity) boss.userData.velocity = new THREE.Vector3();
-        boss.userData.velocity.y = -3.0; 
+        boss.userData.velocity.y = -3.0; // 아래로 낙하 속도
 
+        // 11. 씬에 추가
         scene.add(boss);
 
+        // 12. UI 표시
         document.getElementById('boss-ui').style.display = 'block';
         document.getElementById('boss-hp-fill').style.width = '100%';
         document.getElementById('boss-phase').innerText = `OMEGA ${bossType.toUpperCase()} - PHASE 1`;
 
-        console.log(`OMEGA BOSS (${bossType}) ARRIVED!`);
+        console.log(`OMEGA BOSS (${bossType}) ARRIVED! HP:${setHp} DMG:${setDmg}`);
 
+        // 13. [중요] 보스 등장이 끝났으므로 경고 해제
+        // (단, 보스 객체가 존재하므로 잡몹 스폰 로직(!boss)에 의해 잡몹은 여전히 안 나옴)
         state.isBossWarning = false; 
 
-    }, 5000); 
+    }, 5000); // 5초 대기
 }
-
         
         
         function spawnDebris(pos, color) {
