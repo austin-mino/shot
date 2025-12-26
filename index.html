@@ -1324,43 +1324,67 @@ function spawnPlayerSafely(player, maxTries = 30) {
     return false;
 }
 
-     // [복구] 원래 스타일의 빠르고 심플한 소환 함수
+    // [수정] 적 안전 스폰 (건물 내부/위 스폰 방지 + 빈 공간 찾기)
 function spawnEnemySafely(enemy) {
-    // 5번 정도만 대충 시도해보고 자리 찾으면 바로 소환
     let attempt = 0;
-    while (attempt < 5) {
-        // 1. 플레이어 주변 랜덤 위치 (거리 20~50m)
+    const maxAttempts = 20;
+
+    while (attempt < maxAttempts) {
+        // 1. 플레이어 주변 랜덤 위치 (20m ~ 60m)
         const angle = Math.random() * Math.PI * 2;
-        const dist = 20 + Math.random() * 30;
+        const dist = 20 + Math.random() * 40; 
 
         const x = player.position.x + Math.cos(angle) * dist;
         const z = player.position.z + Math.sin(angle) * dist;
 
-        // 2. 맵 밖으로 나가지 않는지 확인
-        if (x > -MAP_HALF + 5 && x < MAP_HALF - 5 && z > -MAP_HALF + 5 && z < MAP_HALF - 5) {
-            
-            // 위치 잡기 (바닥 높이 계산 안 함, 그냥 groundY)
-            enemy.position.set(x, groundY, z);
+        // 2. 맵 밖 체크
+        if (x < -MAP_HALF + 5 || x > MAP_HALF - 5 || z < -MAP_HALF + 5 || z > MAP_HALF - 5) {
+            attempt++;
+            continue;
+        }
 
-            // 3. [안전] 벽에 끼었는지만 확인 (복잡한 잔해 검사 제거)
-            // 우리가 이미 고쳐둔 enemyIntersectsWall 함수를 쓰므로 에러 안 남!
-            if (!enemyIntersectsWall(enemy)) {
-                // 안전하면 바로 등장!
-                scene.add(enemy);
-                state.enemies.push(enemy);
-                
-                // 물리 초기화
-                if(!enemy.userData.velocity) enemy.userData.velocity = new THREE.Vector3();
-                enemy.userData.velocity.y = 0;
-                
-                return; // 성공했으니 종료
+        // 3. [핵심] 건물 "안"에 있는지 검사 (Bounding Box Check)
+        let insideBuilding = false;
+        const candidatePoint = new THREE.Vector3(x, groundY + 1, z); // 발 위치보다 살짝 위
+
+        for (const wall of colliders.walls) {
+            // 벽(건물)에 박스가 없으면 계산
+            if (!wall.userData.box) {
+                wall.geometry.computeBoundingBox();
+                wall.userData.box = new THREE.Box3().setFromObject(wall);
+            }
+
+            // 건물 박스를 월드 좌표로 변환하여 확인
+            // 박스를 살짝 키워서(expandByScalar) 벽 근처도 피하게 함
+            const wallBox = wall.userData.box.clone();
+            wallBox.applyMatrix4(wall.matrixWorld);
+            wallBox.expandByScalar(2.0); // 건물보다 2m 더 넓게 잡아서 여유 공간 확보
+
+            // 만약 이 박스 안에 점이 들어있다면? -> 건물 속임!
+            if (wallBox.containsPoint(candidatePoint)) {
+                insideBuilding = true;
+                break;
             }
         }
-        attempt++;
-    }
-    // 5번 시도해도 자리 없으면 이번엔 소환 안 함 (다음 기회에)
-}
 
+        if (insideBuilding) {
+            attempt++;
+            continue; // 다시 시도
+        }
+
+        // 4. 성공! 위치 설정
+        enemy.position.set(x, groundY, z);
+        
+        // 물리 초기화
+        if(!enemy.userData.velocity) enemy.userData.velocity = new THREE.Vector3();
+        enemy.userData.velocity.y = 0;
+
+        // 씬에 추가
+        scene.add(enemy);
+        state.enemies.push(enemy);
+        return; // 종료
+    }
+}
         
 // 플레이어 벽 충돌 감지 (Raycaster 버전 - 회전된 경사로 정밀 감지)
 function playerIntersectsWall(pos) {
@@ -1932,11 +1956,30 @@ updateGround(player);
     }
 
 
- // 9. 적/보스 스폰 & AI
-    // 적 스폰 (최대 6마리 유지)
-    if (!boss && state.enemies.length < 6 && Math.random() < 0.005) {
-        // ... (적 스폰 코드는 기존 유지하거나 필요하면 추가)
-        const e = createDetailedHumanoid(0xff4444, false);
+// 9. 적/보스 스폰 & AI
+    
+    // [수정] 적 스폰 로직 (물량 증가 + Gunner 포함)
+    // 1. 최대 적 16마리까지 유지
+    // 2. 스폰 확률 0.03 (약 3%) -> 적이 끊기지 않고 계속 나옴
+    if (!boss && state.enemies.length < 16 && Math.random() < 0.03) {
+        
+        // [핵심] 40% 확률로 Gunner(총 쏘는 적) 생성
+        const isGunner = Math.random() < 0.3;
+        
+        // 색상 결정: Gunner는 주황색(0xffaa00), 일반 적은 빨간색(0xff4444)
+        const color = isGunner ? 0xffaa00 : 0xff4444; 
+
+        // 적 생성
+        const e = createDetailedHumanoid(color, false);
+        
+        // Gunner 속성 부여
+        e.userData.isGunner = isGunner;
+        if (isGunner) {
+            // 태어나자마자 바로 쏘면 피하기 힘드므로 2초 딜레이 줌
+            e.userData.shootCooldown = 2.0; 
+        }
+
+        // 안전한 위치(건물 밖)에 스폰
         spawnEnemySafely(e); 
     }
     
