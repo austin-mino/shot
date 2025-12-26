@@ -1750,6 +1750,50 @@ function checkEnemyCeilingCollision(enemy) {
         }
     }
 }
+
+
+// [추가] 플레이어 벽 충돌 감지 (발, 허리, 머리 3단 체크)
+function checkPlayerWallCollision(player) {
+    const raycaster = new THREE.Raycaster();
+    
+    // 플레이어 충돌 반경 (몸통 두께)
+    const collisionRadius = 0.5; 
+
+    // 8방향 검사 (앞, 뒤, 좌, 우, 대각선)
+    const directions = [
+        new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0),
+        new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1),
+        new THREE.Vector3(0.7, 0, 0.7), new THREE.Vector3(-0.7, 0, 0.7),
+        new THREE.Vector3(0.7, 0, -0.7), new THREE.Vector3(-0.7, 0, -0.7)
+    ];
+
+    // [핵심] 검사할 높이 목록 (발, 허리, 머리)
+    // 플레이어 키가 약 1.8m라고 가정
+    const checkHeights = [0.2, 1.0, 1.7]; 
+
+    for (const h of checkHeights) {
+        // 해당 높이로 레이저 시작점 설정
+        const origin = player.position.clone();
+        origin.y += h; 
+
+        for (const dir of directions) {
+            raycaster.set(origin, dir);
+            
+            // 벽만 검사 (바닥 제외)
+            const hits = raycaster.intersectObjects(colliders.walls, false);
+
+            if (hits.length > 0) {
+                // 몸통 반경보다 가까운 벽이 있으면 충돌!
+                if (hits[0].distance < collisionRadius) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false; // 충돌 없음
+}
+        
+
         
     function animate() {
     requestAnimationFrame(animate);
@@ -1760,28 +1804,78 @@ function checkEnemyCeilingCollision(enemy) {
     const dt = clock.getDelta();
     const time = clock.getElapsedTime();
 
-    // 2. 환경/플레이어
-   // 플레이어 위치에 따라 주변 도시 생성
-    const playerX = camera.position.x;
-    const playerZ = camera.position.z;
-    updateCity(player.position.x, player.position.z);
-    if (!player.userData.isGrounded) updateGround(player);
-        // ... (중략) ...
+    // ------------------------------------------------
+    // 2. 플레이어 이동 및 충돌 처리 (수정됨)
+    // ------------------------------------------------
+    
+    // 이동 속도 설정 (달리기/걷기)
+    const speed = (input.shift ? 0.15 : 0.08) * (isMobile ? 0.8 : 1.0);
+    
+    // 이동 방향 계산 (카메라 기준)
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    
+    // Y축(높이) 영향 제거 (하늘로 날지 않게)
+    forward.y = 0; forward.normalize();
+    right.y = 0; right.normalize();
 
-    // 1. 중력
-    player.userData.velocity.y += physics.gravity;
+    // 입력에 따른 이동 벡터 생성
+    const moveDir = new THREE.Vector3();
+    
+    if (input.w) moveDir.add(forward);
+    if (input.s) moveDir.sub(forward);
+    if (input.a) moveDir.sub(right);
+    if (input.d) moveDir.add(right);
+    
+    // 모바일 조이스틱
+    if (isMobile && (input.joyX !== 0 || input.joyY !== 0)) {
+        const joyFwd = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+        const joyRgt = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+        joyFwd.y = 0; joyFwd.normalize();
+        joyRgt.y = 0; joyRgt.normalize();
+        
+        moveDir.add(joyFwd.multiplyScalar(-input.joyY)); // Y가 위아래
+        moveDir.add(joyRgt.multiplyScalar(input.joyX));
+    }
 
-    // [추가] 천장 충돌 검사 (이동하기 전에 머리 닿는지 확인)
-    checkCeilingCollision(player);
+    // 이동 입력이 있을 때만 실행
+    if (moveDir.lengthSq() > 0) {
+        moveDir.normalize().multiplyScalar(speed);
 
-    // 2. 이동 (Y축)
-    player.position.y += player.userData.velocity.y;
+        // [핵심] X축 이동 시도
+        const oldX = player.position.x;
+        player.position.x += moveDir.x;
+        
+        // 3단 충돌 체크 (발,허리,머리)
+        if (checkPlayerWallCollision(player)) {
+            player.position.x = oldX; // 막히면 취소
+        }
 
-    // 3. 즉시 바닥 보정
-    updateGround(player);
+        // [핵심] Z축 이동 시도
+        const oldZ = player.position.z;
+        player.position.z += moveDir.z;
+        
+        // 3단 충돌 체크
+        if (checkPlayerWallCollision(player)) {
+            player.position.z = oldZ; // 막히면 취소
+        }
+        
+        // 움직이는 애니메이션
+        const at = time * 15;
+        player.userData.lArm.root.rotation.x = -Math.sin(at);
+        player.userData.rArm.root.rotation.x = Math.sin(at);
+        player.userData.lLeg.root.rotation.x = Math.sin(at);
+        player.userData.rLeg.root.rotation.x = -Math.sin(at);
+    } else {
+        // 멈춤 애니메이션
+        player.userData.lArm.root.rotation.x = 0;
+        player.userData.rArm.root.rotation.x = 0;
+        player.userData.lLeg.root.rotation.x = 0;
+        player.userData.rLeg.root.rotation.x = 0;
+    }
 
-    // ... (후략) ...
 
+        
  // 3. 공격 시스템 (총 or 칼)
     if (isFiring) {
         
