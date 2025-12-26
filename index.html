@@ -1681,7 +1681,7 @@ function hitEnemy(enemy, damage) {
         
         if (boss.userData.hp <= 0) {
             scene.remove(boss);
-            state.hp = Math.min(state.hp + 20, 100);
+            state.hp = Math.min(state.hp + 30, 100);
             boss = null;
             state.bossSpawned = false;
             document.getElementById('boss-ui').style.display = 'none';
