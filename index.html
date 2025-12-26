@@ -1242,23 +1242,46 @@ function spawnBoss() {
         // 기존 (3.0, 7.5, 3.0) -> 축소 (1.2, 3.0, 1.2)
         boss.userData.boxSize = new THREE.Vector3(1.3, 3.6, 1.3);
         
-        boss.userData.maxHp = 3000;
-        boss.userData.hp = 3000;
+       // ▼▼▼ [수정] 보스 타입별 체력/데미지 밸런스 조정 ▼▼▼
+        let setHp = 3000;
+        let setDmg = 30;
+
+        // 보스 타입 확인
+        const type = boss.userData.type || bossType; // 안전하게 가져오기
+
+        if (type === 'rush') { 
+            // [하늘색 Rush] 빠르니까 체력/데미지 낮춤 (너프)
+            setHp = 2000; 
+            setDmg = 10;  // ★ 15로 감소 (덜 아픔)
+        } else if (type === 'tank') {
+            // [검은색 Tank] 느리니까 체력/데미지 높임
+            setHp = 4000;
+            setDmg = 36;  // ★ 45로 증가 (아픔)
+        } else {
+            // [보라색 Summoner] 중간 밸런스
+            setHp = 2500;
+            setDmg = 20;
+        }
+
+        // 결정된 능력치 적용
+        boss.userData.maxHp = setHp;
+        boss.userData.hp = setHp;
+        boss.userData.meleeDamage = setDmg; 
+
         boss.userData.isGunner = false;
         boss.userData.phase = 1;
         boss.userData.lastPhase = 1;
-        boss.userData.type = bossType;
+        boss.userData.type = type;
         
         boss.userData.attackTimer = 0;
         
-        // 사거리도 줄여야 함 (팔이 짧아졌으니까)
-        // 기존 7.0 -> 2.5로 수정
+        // [주의] 보스 크기에 따라 사거리 조절 필요
+        // 크기 1.5배 -> 사거리 2.5
+        // 크기 3.0배 -> 사거리 5.5
         boss.userData.meleeRange = 2.5; 
         
-        boss.userData.meleeDamage = 30; 
         boss.userData.meleeCooldown = 0;
-        boss.userData.isFallingEntry = true; 
-
+        boss.userData.isFallingEntry = true;
         applyBossAppearance(boss);
 
         // 코어 장착
@@ -2253,76 +2276,178 @@ updateGround(player);
         if (e === boss) {
             e.userData.attackTimer += dt;
             
-            // (1) 근접 공격
-            if (dist < e.userData.meleeRange) {
-                e.userData.meleeCooldown -= dt;
-                if (e.userData.meleeCooldown <= 0) {
-                    state.hp -= e.userData.meleeDamage * (e.userData.phase * 0.5 + 0.5);
-                    
-                    const knockDir = new THREE.Vector3().subVectors(player.position, e.position).normalize().multiplyScalar(2.0);
-                    knockDir.y = 0.5;
-                    player.position.add(knockDir);
-                    
-                    const overlay = document.getElementById('damage-overlay');
-                    overlay.style.opacity = 0.8; setTimeout(() => overlay.style.opacity = 0, 300);
-                    shakeCamera(0.5, 300);
+           // (1) 근접 공격 (내려찍기 스매시)
+            // [조건] 사거리 안이고, 쿨타임 끝났고, 현재 공격 중이 아닐 때
+            if (dist < e.userData.meleeRange && e.userData.meleeCooldown <= 0 && !e.userData.isAttacking) {
+                
+                // 1. 공격 시작 플래그 (중복 실행 방지)
+                e.userData.isAttacking = true; 
 
-                    e.userData.meleeCooldown = 1.5;
-                    e.userData.rArm.root.rotation.x = -2.0;
-                    setTimeout(() => { e.userData.rArm.root.rotation.x = 0; }, 400);
-                }
+                // 2. [준비 동작] 팔을 높이 들어 올림 (플레이어에게 "피해라!" 경고)
+                const windUpTime = 600; // 0.6초 동안 기를 모음
+                e.userData.rArm.root.rotation.x = -2.5; // 팔을 뒤로 확 젖힘
+                
+                // 3. 0.6초 뒤에 강타!
+                setTimeout(() => {
+                    // 보스가 이미 죽었거나 사라졌으면 중단
+                    if (!e || !e.parent) return;
+
+                    // [타격 동작] 팔을 앞으로 내리꽂음
+                    e.userData.rArm.root.rotation.x = 0.5; 
+
+                    // [타격 판정] 공격 시점에 플레이어가 여전히 범위 안에 있는지 확인 (회피 가능)
+                    // 공격 범위는 살짝 더 넓게(Range + 1.0) 잡아서 스치기만 해도 맞게 함
+                    const currentDist = e.position.distanceTo(player.position);
+                    
+                    if (currentDist < e.userData.meleeRange + 1.5) {
+                        // 데미지 적용
+                        state.hp -= e.userData.meleeDamage * (e.userData.phase * 0.5 + 0.5);
+                        
+                        // 강력한 넉백 (위로 띄우면서 밀어냄)
+                        const knockDir = new THREE.Vector3().subVectors(player.position, e.position).normalize().multiplyScalar(4.0);
+                        knockDir.y = 2.0; // 공중으로 띄움
+                        player.position.add(knockDir);
+                        
+                        // 화면 붉게 + 강한 진동
+                        const overlay = document.getElementById('damage-overlay');
+                        overlay.style.opacity = 0.8; setTimeout(() => overlay.style.opacity = 0, 300);
+                        shakeCamera(1.0, 400); // 진동 세기 강화
+                    } else {
+                        // 플레이어가 피했으면 땅만 울림 (약한 진동)
+                        shakeCamera(0.3, 200);
+                    }
+
+                    // [이펙트] 땅 찍은 자리에 파편 튀기기 (맞든 안 맞든 나옴)
+                    // 보스 앞쪽 바닥 위치 계산
+                    const smashPos = e.position.clone().add(new THREE.Vector3(0, 0, 2).applyQuaternion(e.quaternion));
+                    smashPos.y = groundY;
+                    spawnDebris(smashPos, 0xaaaaaa, 8); // 회색 먼지 파편
+
+                    // 4. [복귀] 잠시 후 원래 자세로
+                    setTimeout(() => {
+                        if (e && e.parent) {
+                            e.userData.rArm.root.rotation.x = 0;
+                            e.userData.isAttacking = false; // 공격 종료
+                            e.userData.meleeCooldown = 1.5; // 쿨타임 시작
+                        }
+                    }, 400);
+
+                }, windUpTime);
+            }
+            
+            // 쿨타임 감소 (공격 중 아닐 때만)
+            if (!e.userData.isAttacking) {
+                e.userData.meleeCooldown -= dt;
             }
 
-            // (2) 보스 특수 스킬 (코드 유지)
+           // (2) 보스 특수 스킬 (패턴 강화됨)
             const phase = e.userData.phase;
             const type = e.userData.type;
-            const attackDelay = phase === 1 ? 3.0 : phase === 2 ? 2.0 : 1.2;
+            
+            // 페이즈가 오를수록 공격 딜레이 감소 (난이도 상승)
+            const attackDelay = phase === 1 ? 3.5 : phase === 2 ? 2.5 : 1.5;
             
             if (e.userData.attackTimer > attackDelay) {
                 e.userData.attackTimer = 0;
                 const bossHeadPos = e.position.clone().add(new THREE.Vector3(0, 6.0, 0));
 
+                // [TANK]: 검은색 - 산탄 + 예측 조준 사격
                 if (type === 'tank') { 
+                    // 1. 기본 원형 산탄 (기존 유지)
                     const count = 8 * phase; 
                     for (let i = 0; i < count; i++) {
                         const angle = (Math.PI * 2 / count) * i;
                         const dir = new THREE.Vector3(Math.sin(angle), -0.2, Math.cos(angle)).normalize();
                         fireBullet(true, bossHeadPos, dir, 0.8); 
                     }
-                    shakeCamera(0.2, 100);
+                    
+                    // 2. [추가] 플레이어 미래 위치 예측 사격 (3발) 
+                    // 플레이어가 움직이는 방향 앞쪽을 쏩니다.
+                    if (phase >= 2) {
+                        const futurePos = player.position.clone().add(
+                            new THREE.Vector3().subVectors(player.position, camera.position).normalize().multiplyScalar(3.0) // 3m 앞 예측
+                        );
+                        const aimDir = new THREE.Vector3().subVectors(futurePos, bossHeadPos).normalize();
+                        
+                        // 부채꼴로 3발 발사
+                        fireBullet(true, bossHeadPos, aimDir, 1.2); // 중앙 (빠름)
+                        
+                        const leftDir = aimDir.clone().applyAxisAngle(new THREE.Vector3(0,1,0), 0.2);
+                        const rightDir = aimDir.clone().applyAxisAngle(new THREE.Vector3(0,1,0), -0.2);
+                        fireBullet(true, bossHeadPos, leftDir, 1.0);
+                        fireBullet(true, bossHeadPos, rightDir, 1.0);
+                    }
+                    shakeCamera(0.3, 150);
                 }
                 
+                // [RUSH]: 하늘색 - 연속 돌진 (지그재그)
                 if (type === 'rush') {
-                    const dir = new THREE.Vector3().subVectors(player.position, e.position).normalize();
-                    const rushDist = 10 * phase; 
-                    const target = e.position.clone().add(dir.multiplyScalar(rushDist));
-                    moveEnemyLikePlayer(e, target, 0.5); 
-                    spawnDebris(e.position, 0xffaa00, 5);
+                    // [변경] 한 번 쓱 가는 게 아니라, 페이즈만큼 연속으로 팍! 팍! 움직임
+                    let dashCount = phase; 
+                    
+                    const performDash = (count) => {
+                        if (count <= 0) return;
+
+                        const dir = new THREE.Vector3().subVectors(player.position, e.position).normalize();
+                        const rushDist = 8 + (Math.random() * 5); // 8~13m 랜덤 거리
+                        
+                        // 약간 옆으로 비껴서 돌진 (플레이어 교란)
+                        if (Math.random() < 0.5) dir.applyAxisAngle(new THREE.Vector3(0,1,0), (Math.random()-0.5) * 0.5);
+
+                        const target = e.position.clone().add(dir.multiplyScalar(rushDist));
+                        moveEnemyLikePlayer(e, target, 0.8); // 매우 빠름 (0.5 -> 0.8)
+                        spawnDebris(e.position, 0x00ffff, 8); // 청록색 잔상
+
+                        // 다음 돌진 예약 (0.3초 뒤)
+                        setTimeout(() => performDash(count - 1), 300);
+                    };
+
+                    performDash(dashCount);
                 }
 
+                // [SUMMONER]: 보라색 - 자폭병 소환 + 광역 힐
                 if (type === 'summoner') {
-                    const count = (phase === 3 ? 2 : 1);
-                    for (let i = 0; i < count; i++) {
-                        if (state.enemies.length >= 8) break;
-                        const minion = createDetailedHumanoid(0xffffff, false);
-                        minion.position.copy(e.position).add(new THREE.Vector3((Math.random()-0.5)*8, 0, (Math.random()-0.5)*8));
-                        minion.userData.isGunner = true;
-                        minion.userData.shootCooldown = 1.0;
-                        minion.traverse(obj => { if (obj.isMesh) obj.material.color.set(0xffd700); });
-                        scene.add(minion);
-                        state.enemies.push(minion);
-                        state.gunnerCount++;
+                    // 미니언 소환 (최대 수 제한)
+                    if (state.enemies.length < 12) {
+                        const count = (phase === 3 ? 2 : 1);
+                        for (let i = 0; i < count; i++) {
+                            const minion = createDetailedHumanoid(0xffffff, false);
+                            // 보스 주변 랜덤 위치
+                            const spawnOffset = new THREE.Vector3((Math.random()-0.5)*10, 0, (Math.random()-0.5)*10);
+                            minion.position.copy(e.position).add(spawnOffset);
+                            
+                            // [변경] 서머너 미니언은 총 안 쏘고 '자폭'함 (달리기 빠름)
+                            minion.userData.isGunner = false; 
+                            minion.userData.isKamikaze = true; // 자폭병 속성 (새로 추가 필요, 없으면 그냥 칼질)
+                            
+                            // 외형: 황금색 -> 붉은색 (위험해 보이게)
+                            minion.traverse(obj => { if (obj.isMesh) obj.material.color.set(0xff0000); });
+                            
+                            scene.add(minion);
+                            state.enemies.push(minion);
+                        }
+                    }
+                    
+                    // [추가] 3페이즈엔 주변 적 치료 이펙트
+                    if (phase === 3) {
+                         state.enemies.forEach(ally => {
+                             if (ally !== boss && ally.position.distanceTo(boss.position) < 20) {
+                                 // 치료 이펙트만 (실제 힐은 복잡하니 생략)
+                                 spawnDebris(ally.position, 0x00ff00, 3);
+                             }
+                         });
                     }
                 }
 
-                if (phase === 3 && Math.random() < 0.3) {
-                    const teleportPos = player.position.clone().add(new THREE.Vector3((Math.random()-0.5)*10, 0, (Math.random()-0.5)*10));
-                    e.position.copy(teleportPos);
-                    e.position.y = groundY;
-                    spawnDebris(e.position, 0xffffff, 10);
+                // [공통] 3페이즈 발악 패턴: 공중 폭격 (순간이동 대신)
+                if (phase === 3 && Math.random() < 0.2) {
+                    // 하늘로 순간이동 후 내려찍기
+                    const skyPos = player.position.clone().add(new THREE.Vector3(0, 20, 0));
+                    e.position.copy(skyPos);
+                    e.userData.velocity.y = -2.0; // 아래로 강하게 낙하
+                    // 착지 시 checkBossLandingEffect가 발동되어 충격파 발생함
                 }
             }
-        } 
 
         // 5. 이동 및 애니메이션 (추격)
         // [수정] 멈추는 거리(stopRange)를 적 종류마다 다르게 설정
