@@ -1358,7 +1358,7 @@ function spawnEnemySafely(enemy) {
             // 박스를 살짝 키워서(expandByScalar) 벽 근처도 피하게 함
             const wallBox = wall.userData.box.clone();
             wallBox.applyMatrix4(wall.matrixWorld);
-            wallBox.expandByScalar(2.0); // 건물보다 2m 더 넓게 잡아서 여유 공간 확보
+            wallBox.expandByScalar(4.0); // 건물보다 2m 더 넓게 잡아서 여유 공간 확보
 
             // 만약 이 박스 안에 점이 들어있다면? -> 건물 속임!
             if (wallBox.containsPoint(candidatePoint)) {
@@ -1958,32 +1958,32 @@ updateGround(player);
 
 // 9. 적/보스 스폰 & AI
     
-    // [수정] 적 스폰 로직 (물량 증가 + Gunner 포함)
-    // 1. 최대 적 16마리까지 유지
-    // 2. 스폰 확률 0.03 (약 3%) -> 적이 끊기지 않고 계속 나옴
+    // [수정] 적 스폰 (최대 16마리, Gunner 최대 3마리 제한)
     if (!boss && state.enemies.length < 16 && Math.random() < 0.03) {
         
-        // [핵심] 40% 확률로 Gunner(총 쏘는 적) 생성
-        const isGunner = Math.random() < 0.3;
-        
-        // 색상 결정: Gunner는 주황색(0xffaa00), 일반 적은 빨간색(0xff4444)
-        const color = isGunner ? 0xffaa00 : 0xff4444; 
+        let isGunner = false;
 
-        // 적 생성
+        // [핵심] 현재 Gunner가 3명 미만일 때만 Gunner 생성 시도 (확률 40%)
+        // 3명 꽉 찼으면 무조건 일반 적(false)이 됨
+        if (state.gunnerCount < 4) {
+            isGunner = Math.random() < 0.4;
+        }
+
+        // Gunner면 주황색(ffaa00), 일반 적은 빨간색(ff4444)
+        const color = isGunner ? 0xffaa00 : 0xff4444; 
         const e = createDetailedHumanoid(color, false);
         
         // Gunner 속성 부여
         e.userData.isGunner = isGunner;
         if (isGunner) {
-            // 태어나자마자 바로 쏘면 피하기 힘드므로 2초 딜레이 줌
-            e.userData.shootCooldown = 2.0; 
+            e.userData.shootCooldown = 2.0; // 생성 후 2초간 딜레이
+            state.gunnerCount++; // ★ Gunner 숫자 증가
         }
 
-        // 안전한 위치(건물 밖)에 스폰
         spawnEnemySafely(e); 
     }
     
-    // 보스 스폰 조건
+    // 보스 스폰 (기존 코드 유지)
     if (state.score >= state.nextBossScore && !state.bossSpawned) {
         spawnBoss();
         state.nextBossScore += 3000;
