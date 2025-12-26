@@ -1173,17 +1173,17 @@ function applyBossAppearance(boss) {
     }
 }
 
-// [최종 수정] 보스 소환 (스폰 원천 봉쇄 기능 추가)
+// [최종 수정] 보스 소환 (크기 1.5배 + 판정 박스 수정)
 function spawnBoss() {
     state.bossSpawned = true; 
-    state.isBossWarning = true; // [핵심] 지금부터 잡몹 스폰 금지!
+    state.isBossWarning = true; 
 
     // 1. [1차 청소]
     state.enemies.forEach(enemy => scene.remove(enemy));
     state.enemies = [];
     state.gunnerCount = 0;
 
-    // ... (위치 계산 및 마커 생성 코드는 기존과 동일) ...
+    // 2. 위치 계산
     const spawnDist = 30; 
     const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion).normalize();
     const spawnPos = player.position.clone().add(direction.multiplyScalar(spawnDist));
@@ -1192,6 +1192,7 @@ function spawnBoss() {
     spawnPos.z = Math.max(-MAP_HALF + 20, Math.min(MAP_HALF - 20, spawnPos.z));
     spawnPos.y = groundY; 
 
+    // 마커 생성
     const markerGeo = new THREE.CylinderGeometry(8, 8, 100, 32); 
     const markerMat = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
     const marker = new THREE.Mesh(markerGeo, markerMat);
@@ -1211,18 +1212,23 @@ function spawnBoss() {
         scene.remove(marker);
         if(bossMsg) bossMsg.style.display = 'none';
 
-        // 4. [2차 청소] 혹시라도 생긴 게 있다면 삭제 (이젠 거의 없겠지만 확실하게)
+        // 4. [2차 청소]
         state.enemies.forEach(enemy => scene.remove(enemy));
         state.enemies = [];
         state.gunnerCount = 0;
 
-        // 5. 보스 생성 (기존 코드 동일)
+        // 5. 보스 생성
         const bossType = Math.random() < 0.33 ? 'tank' : Math.random() < 0.5 ? 'rush' : 'summoner';
         boss = createDetailedHumanoid(0xffffff, true); 
         
-        const scale = 4.0; 
+        // ▼▼▼ [여기가 바뀐 부분입니다!] ▼▼▼
+        const scale = 1.5; // 크기 4.0 -> 1.5배로 축소
         boss.scale.set(scale, scale, scale); 
-        boss.userData.boxSize = new THREE.Vector3(3.0, 7.5, 3.0);
+        
+        // 덩치가 작아졌으니 충돌 박스도 작게 수정 (안 그러면 투명 벽에 막힘)
+        // 기존 (3.0, 7.5, 3.0) -> 축소 (1.2, 3.0, 1.2)
+        boss.userData.boxSize = new THREE.Vector3(1.2, 3.0, 1.2);
+        
         boss.userData.maxHp = 3000;
         boss.userData.hp = 3000;
         boss.userData.isGunner = false;
@@ -1231,13 +1237,18 @@ function spawnBoss() {
         boss.userData.type = bossType;
         
         boss.userData.attackTimer = 0;
-        boss.userData.meleeRange = 7.0; 
+        
+        // 사거리도 줄여야 함 (팔이 짧아졌으니까)
+        // 기존 7.0 -> 2.5로 수정
+        boss.userData.meleeRange = 2.5; 
+        
         boss.userData.meleeDamage = 30; 
         boss.userData.meleeCooldown = 0;
         boss.userData.isFallingEntry = true; 
 
         applyBossAppearance(boss);
 
+        // 코어 장착
         const coreGeo = new THREE.SphereGeometry(0.3, 16, 16);
         const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff }); 
         const core = new THREE.Mesh(coreGeo, coreMat);
@@ -1247,8 +1258,10 @@ function spawnBoss() {
         
         applyBossAppearance(boss);
 
+        // 낙하 위치 (작아졌으니 너무 높지 않게 조정)
         boss.position.copy(spawnPos);
-        boss.position.y += 60; 
+        boss.position.y += 40; // 60 -> 40
+
         if (!boss.userData.velocity) boss.userData.velocity = new THREE.Vector3();
         boss.userData.velocity.y = -3.0; 
 
@@ -1260,12 +1273,12 @@ function spawnBoss() {
 
         console.log(`OMEGA BOSS (${bossType}) ARRIVED!`);
 
-        // [중요] 보스 등장이 끝났으니 경고 해제 (하지만 보스가 있으니 잡몹은 안 나옴)
         state.isBossWarning = false; 
 
     }, 5000); 
 }
 
+        
         
         function spawnDebris(pos, color) {
             for(let i=0; i<8; i++) {
