@@ -1324,66 +1324,91 @@ function spawnPlayerSafely(player, maxTries = 30) {
     return false;
 }
 
-// [최종] 적 안전 스폰 (빈 땅 + 낮은 잔해 위 허용, 건물 지붕 차단)
+// [최종 완결] 적 안전 스폰 (지붕 검사 + 벽 거리두기 이중 체크)
 function spawnEnemySafely(enemy) {
     const raycaster = new THREE.Raycaster();
     const downVector = new THREE.Vector3(0, -1, 0); 
     
     let attempt = 0;
-    // 시도 횟수를 50번으로 늘려서 빈 공간을 더 집요하게 찾음
-    const maxAttempts = 1000; 
+    const maxAttempts = 50; 
 
     while (attempt < maxAttempts) {
-        // 1. 플레이어 주변 랜덤 위치 (건물 뚫고 나오지 않게 거리 약간 조정)
+        // 1. 랜덤 위치 선정
         const angle = Math.random() * Math.PI * 2;
-        const dist = 25 + Math.random() * 45; // 25m ~ 70m
-
+        const dist = 30 + Math.random() * 40; 
         const x = player.position.x + Math.cos(angle) * dist;
         const z = player.position.z + Math.sin(angle) * dist;
 
-        // 2. 맵 밖 체크
+        // 맵 범위 체크
         if (x < -MAP_HALF + 5 || x > MAP_HALF - 5 || z < -MAP_HALF + 5 || z > MAP_HALF - 5) {
             attempt++; continue;
         }
 
-        // 3. 하늘에서 레이저 발사
+        // ==========================================
+        // [검사 1] 수직 체크: 지붕이나 높은 곳인가?
+        // ==========================================
         raycaster.set(new THREE.Vector3(x, 100, z), downVector);
-
-        // 건물(walls)과 잔해(floors) 검사
         const hits = raycaster.intersectObjects([...colliders.walls, ...colliders.floors], false);
 
+        // 아무것도 없거나(빈 땅), 닿은 곳 높이가 1.5m보다 높으면(건물/장애물 위) 실패
+        let spawnY = groundY;
         if (hits.length > 0) {
-            // 무언가에 맞았다면 높이 확인
-            const hitHeight = hits[0].point.y;
-
-            // [경우 1] 건물 지붕이나 높은 벽 위 (높이차 2m 이상) -> 스폰 실패
-            if (hitHeight > groundY + 2.0) {
-                attempt++; continue; 
+            const hitY = hits[0].point.y;
+            if (hitY > groundY + 1.5) { 
+                attempt++; continue; // 지붕 위거나 장애물 위임 -> 다시 뽑기
             }
-
-            // [경우 2] 낮은 잔해 위 (높이차 2m 미만) -> 스폰 성공
-            enemy.position.set(x, hitHeight, z);
+            spawnY = hitY;
         } else {
-            // [경우 3 - 핵심 수정] 아무것에도 안 맞음 = "빈 땅" -> 스폰 성공!
-            // 기존에는 여기서 스폰을 안 하고 넘어가서 적이 적었음
-            enemy.position.set(x, groundY, z);
+            // 아무것도 안 닿았으면 맨땅(groundY)으로 간주
+            spawnY = groundY;
         }
 
-        // 4. 성공 처리
+        // ==========================================
+        // [검사 2] 수평 체크: 주변 2.5m 내에 벽이 있는가?
+        // ==========================================
+        const candidatePos = new THREE.Vector3(x, spawnY, z);
+        let tooCloseToWall = false;
+
+        for (const wall of colliders.walls) {
+            // 박스가 없으면 생성
+            if (!wall.userData.box) {
+                wall.geometry.computeBoundingBox();
+                wall.userData.box = new THREE.Box3().setFromObject(wall);
+            }
+
+            // 월드 좌표 박스 준비
+            const wallBox = wall.userData.box.clone();
+            wallBox.applyMatrix4(wall.matrixWorld);
+
+            // [핵심] 벽과의 거리가 2.5m 이내면 실패! (뚱뚱해도 안 낌)
+            if (wallBox.distanceToPoint(candidatePos) < 2.5) {
+                tooCloseToWall = true;
+                break; 
+            }
+        }
+
+        if (tooCloseToWall) {
+            attempt++; continue; // 벽이랑 너무 가까움 -> 다시 뽑기
+        }
+
+        // ==========================================
+        // [성공] 모든 검사 통과
+        // ==========================================
+        enemy.position.set(x, spawnY, z);
+        
         if(!enemy.userData.velocity) enemy.userData.velocity = new THREE.Vector3();
         enemy.userData.velocity.y = 0;
 
         scene.add(enemy);
         state.enemies.push(enemy);
-        return; // 완료
+        return; 
     }
     
-    // 자리 못 찾음 (Gunner였다면 카운트 복구)
+    // 실패 시 Gunner 카운트 복구
     if (enemy.userData.isGunner) {
         state.gunnerCount--;
     }
 }
-
 
 
         
