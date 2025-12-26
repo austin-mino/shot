@@ -1806,28 +1806,28 @@ function checkPlayerWallCollision(player) {
     const dt = clock.getDelta();
     const time = clock.getElapsedTime();
 
-    // ------------------------------------------------
-    // 2. 플레이어 이동 및 충돌 처리 (수정됨)
+  // ------------------------------------------------
+    // 2. 플레이어 이동 및 충돌 처리 (수정됨 - 변수 충돌 방지)
     // ------------------------------------------------
     
-    // 이동 속도 설정 (달리기/걷기)
+    // 이동 속도 설정
     const speed = (input.shift ? 0.15 : 0.08) * (isMobile ? 0.8 : 1.0);
     
-    // 이동 방향 계산 (카메라 기준)
+    // [중요] 이동 방향 계산 (여기서 한 번만 선언)
+    // 만약 위쪽에서 forward, right 오류가 또 난다면, 위쪽의 선언부를 지우세요!
     const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    const rightVector = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion); // 이름 변경 (right -> rightVector)
     
-    // Y축(높이) 영향 제거 (하늘로 날지 않게)
+    // Y축 제거 (수평 이동만)
     forward.y = 0; forward.normalize();
-    right.y = 0; right.normalize();
+    rightVector.y = 0; rightVector.normalize();
 
-    // 입력에 따른 이동 벡터 생성
     const moveDir = new THREE.Vector3();
     
     if (input.w) moveDir.add(forward);
     if (input.s) moveDir.sub(forward);
-    if (input.a) moveDir.sub(right);
-    if (input.d) moveDir.add(right);
+    if (input.a) moveDir.sub(rightVector); // rightVector 사용
+    if (input.d) moveDir.add(rightVector);
     
     // 모바일 조이스틱
     if (isMobile && (input.joyX !== 0 || input.joyY !== 0)) {
@@ -1836,46 +1836,41 @@ function checkPlayerWallCollision(player) {
         joyFwd.y = 0; joyFwd.normalize();
         joyRgt.y = 0; joyRgt.normalize();
         
-        moveDir.add(joyFwd.multiplyScalar(-input.joyY)); // Y가 위아래
+        moveDir.add(joyFwd.multiplyScalar(-input.joyY)); 
         moveDir.add(joyRgt.multiplyScalar(input.joyX));
     }
 
-    // 이동 입력이 있을 때만 실행
+    // 실제 이동 적용
     if (moveDir.lengthSq() > 0) {
         moveDir.normalize().multiplyScalar(speed);
 
-        // [핵심] X축 이동 시도
+        // X축 이동 & 충돌 체크
         const oldX = player.position.x;
         player.position.x += moveDir.x;
-        
-        // 3단 충돌 체크 (발,허리,머리)
         if (checkPlayerWallCollision(player)) {
-            player.position.x = oldX; // 막히면 취소
+            player.position.x = oldX; 
         }
 
-        // [핵심] Z축 이동 시도
+        // Z축 이동 & 충돌 체크
         const oldZ = player.position.z;
         player.position.z += moveDir.z;
-        
-        // 3단 충돌 체크
         if (checkPlayerWallCollision(player)) {
-            player.position.z = oldZ; // 막히면 취소
+            player.position.z = oldZ; 
         }
         
-        // 움직이는 애니메이션
+        // 걷는 애니메이션
         const at = time * 15;
         player.userData.lArm.root.rotation.x = -Math.sin(at);
         player.userData.rArm.root.rotation.x = Math.sin(at);
         player.userData.lLeg.root.rotation.x = Math.sin(at);
         player.userData.rLeg.root.rotation.x = -Math.sin(at);
     } else {
-        // 멈춤 애니메이션
+        // 멈춤
         player.userData.lArm.root.rotation.x = 0;
         player.userData.rArm.root.rotation.x = 0;
         player.userData.lLeg.root.rotation.x = 0;
         player.userData.rLeg.root.rotation.x = 0;
     }
-
 
         
  // 3. 공격 시스템 (총 or 칼)
