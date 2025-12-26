@@ -1324,18 +1324,19 @@ function spawnPlayerSafely(player, maxTries = 30) {
     return false;
 }
 
-  // [최종 수정] 적 안전 스폰 (지붕 감지 레이저 - 건물 내부 스폰 원천 봉쇄)
+// [최종] 적 안전 스폰 (빈 땅 + 낮은 잔해 위 허용, 건물 지붕 차단)
 function spawnEnemySafely(enemy) {
     const raycaster = new THREE.Raycaster();
-    const downVector = new THREE.Vector3(0, -1, 0); // 아래로 쏘는 방향
+    const downVector = new THREE.Vector3(0, -1, 0); 
     
     let attempt = 0;
-    const maxAttempts = 20; // 20번 시도
+    // 시도 횟수를 50번으로 늘려서 빈 공간을 더 집요하게 찾음
+    const maxAttempts = 100; 
 
     while (attempt < maxAttempts) {
-        // 1. 플레이어 주변 랜덤 위치
+        // 1. 플레이어 주변 랜덤 위치 (건물 뚫고 나오지 않게 거리 약간 조정)
         const angle = Math.random() * Math.PI * 2;
-        const dist = 30 + Math.random() * 40; 
+        const dist = 25 + Math.random() * 45; // 25m ~ 70m
 
         const x = player.position.x + Math.cos(angle) * dist;
         const z = player.position.z + Math.sin(angle) * dist;
@@ -1345,42 +1346,46 @@ function spawnEnemySafely(enemy) {
             attempt++; continue;
         }
 
-        // 3. [핵심] 하늘(Y=100)에서 수직으로 레이저 발사
-        // 원리: 건물이 있다면 레이저가 '지붕'을 먼저 때려서 Y값이 높게 나옴
+        // 3. 하늘에서 레이저 발사
         raycaster.set(new THREE.Vector3(x, 100, z), downVector);
 
-        // 벽, 바닥 모든 물체 검사
+        // 건물(walls)과 잔해(floors) 검사
         const hits = raycaster.intersectObjects([...colliders.walls, ...colliders.floors], false);
 
         if (hits.length > 0) {
-            // 가장 먼저 닿은 물체의 높이(Y) 확인
+            // 무언가에 맞았다면 높이 확인
             const hitHeight = hits[0].point.y;
 
-            // [조건] 높이가 땅바닥(groundY)과 거의 같아야 함 (오차 1.5m 허용)
-            // 건물이면 지붕 높이(예: 10m, 20m)가 나오므로 걸러짐!
-            if (Math.abs(hitHeight - groundY) < 1.5) {
-                
-                // 4. 안전함 -> 소환 확정
-                enemy.position.set(x, hitHeight, z);
-                
-                if(!enemy.userData.velocity) enemy.userData.velocity = new THREE.Vector3();
-                enemy.userData.velocity.y = 0;
-
-                scene.add(enemy);
-                state.enemies.push(enemy);
-                return; // 성공했으니 종료
+            // [경우 1] 건물 지붕이나 높은 벽 위 (높이차 2m 이상) -> 스폰 실패
+            if (hitHeight > groundY + 2.0) {
+                attempt++; continue; 
             }
+
+            // [경우 2] 낮은 잔해 위 (높이차 2m 미만) -> 스폰 성공
+            enemy.position.set(x, hitHeight, z);
+        } else {
+            // [경우 3 - 핵심 수정] 아무것에도 안 맞음 = "빈 땅" -> 스폰 성공!
+            // 기존에는 여기서 스폰을 안 하고 넘어가서 적이 적었음
+            enemy.position.set(x, groundY, z);
         }
-        
-        attempt++; // 지붕 위거나 장애물 위면 다시 뽑기
+
+        // 4. 성공 처리
+        if(!enemy.userData.velocity) enemy.userData.velocity = new THREE.Vector3();
+        enemy.userData.velocity.y = 0;
+
+        scene.add(enemy);
+        state.enemies.push(enemy);
+        return; // 완료
     }
     
-    // 자리 못 찾으면 이번 턴엔 그냥 넘어감 (Gunner 숫자 안 늘어남)
-    // 만약 Gunner였다면 카운트 원상복구 해줘야 함
+    // 자리 못 찾음 (Gunner였다면 카운트 복구)
     if (enemy.userData.isGunner) {
         state.gunnerCount--;
     }
 }
+
+
+
         
 // 플레이어 벽 충돌 감지 (Raycaster 버전 - 회전된 경사로 정밀 감지)
 function playerIntersectsWall(pos) {
