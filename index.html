@@ -1324,65 +1324,61 @@ function spawnPlayerSafely(player, maxTries = 30) {
     return false;
 }
 
-    // [수정] 적 안전 스폰 (건물 내부/위 스폰 방지 + 빈 공간 찾기)
+  // [최종 수정] 적 안전 스폰 (지붕 감지 레이저 - 건물 내부 스폰 원천 봉쇄)
 function spawnEnemySafely(enemy) {
+    const raycaster = new THREE.Raycaster();
+    const downVector = new THREE.Vector3(0, -1, 0); // 아래로 쏘는 방향
+    
     let attempt = 0;
-    const maxAttempts = 20;
+    const maxAttempts = 20; // 20번 시도
 
     while (attempt < maxAttempts) {
-        // 1. 플레이어 주변 랜덤 위치 (20m ~ 60m)
+        // 1. 플레이어 주변 랜덤 위치
         const angle = Math.random() * Math.PI * 2;
-        const dist = 20 + Math.random() * 40; 
+        const dist = 30 + Math.random() * 40; 
 
         const x = player.position.x + Math.cos(angle) * dist;
         const z = player.position.z + Math.sin(angle) * dist;
 
         // 2. 맵 밖 체크
         if (x < -MAP_HALF + 5 || x > MAP_HALF - 5 || z < -MAP_HALF + 5 || z > MAP_HALF - 5) {
-            attempt++;
-            continue;
+            attempt++; continue;
         }
 
-        // 3. [핵심] 건물 "안"에 있는지 검사 (Bounding Box Check)
-        let insideBuilding = false;
-        const candidatePoint = new THREE.Vector3(x, groundY + 1, z); // 발 위치보다 살짝 위
+        // 3. [핵심] 하늘(Y=100)에서 수직으로 레이저 발사
+        // 원리: 건물이 있다면 레이저가 '지붕'을 먼저 때려서 Y값이 높게 나옴
+        raycaster.set(new THREE.Vector3(x, 100, z), downVector);
 
-        for (const wall of colliders.walls) {
-            // 벽(건물)에 박스가 없으면 계산
-            if (!wall.userData.box) {
-                wall.geometry.computeBoundingBox();
-                wall.userData.box = new THREE.Box3().setFromObject(wall);
+        // 벽, 바닥 모든 물체 검사
+        const hits = raycaster.intersectObjects([...colliders.walls, ...colliders.floors], false);
+
+        if (hits.length > 0) {
+            // 가장 먼저 닿은 물체의 높이(Y) 확인
+            const hitHeight = hits[0].point.y;
+
+            // [조건] 높이가 땅바닥(groundY)과 거의 같아야 함 (오차 1.5m 허용)
+            // 건물이면 지붕 높이(예: 10m, 20m)가 나오므로 걸러짐!
+            if (Math.abs(hitHeight - groundY) < 1.5) {
+                
+                // 4. 안전함 -> 소환 확정
+                enemy.position.set(x, hitHeight, z);
+                
+                if(!enemy.userData.velocity) enemy.userData.velocity = new THREE.Vector3();
+                enemy.userData.velocity.y = 0;
+
+                scene.add(enemy);
+                state.enemies.push(enemy);
+                return; // 성공했으니 종료
             }
-
-            // 건물 박스를 월드 좌표로 변환하여 확인
-            // 박스를 살짝 키워서(expandByScalar) 벽 근처도 피하게 함
-            const wallBox = wall.userData.box.clone();
-            wallBox.applyMatrix4(wall.matrixWorld);
-            wallBox.expandByScalar(4.0); // 건물보다 2m 더 넓게 잡아서 여유 공간 확보
-
-            // 만약 이 박스 안에 점이 들어있다면? -> 건물 속임!
-            if (wallBox.containsPoint(candidatePoint)) {
-                insideBuilding = true;
-                break;
-            }
         }
-
-        if (insideBuilding) {
-            attempt++;
-            continue; // 다시 시도
-        }
-
-        // 4. 성공! 위치 설정
-        enemy.position.set(x, groundY, z);
         
-        // 물리 초기화
-        if(!enemy.userData.velocity) enemy.userData.velocity = new THREE.Vector3();
-        enemy.userData.velocity.y = 0;
-
-        // 씬에 추가
-        scene.add(enemy);
-        state.enemies.push(enemy);
-        return; // 종료
+        attempt++; // 지붕 위거나 장애물 위면 다시 뽑기
+    }
+    
+    // 자리 못 찾으면 이번 턴엔 그냥 넘어감 (Gunner 숫자 안 늘어남)
+    // 만약 Gunner였다면 카운트 원상복구 해줘야 함
+    if (enemy.userData.isGunner) {
+        state.gunnerCount--;
     }
 }
         
