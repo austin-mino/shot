@@ -1985,7 +1985,7 @@ updateGround(player);
 // 9. 적/보스 스폰 & AI
     
     // [수정] 적 스폰 (최대 16마리, Gunner 최대 3마리 제한)
-    if (!boss && state.enemies.length < 25 && Math.random() < 0.03) {
+    if (!boss && state.enemies.length < 36 && Math.random() < 0.06) {
         
         let isGunner = false;
 
@@ -2019,31 +2019,40 @@ updateGround(player);
     const allEnemies = [...state.enemies];
     if (boss) allEnemies.push(boss);
 
-    allEnemies.forEach(e => { // 여기서 'e'가 정의됨
+  allEnemies.forEach(e => { 
         
-        // 1. 물리 적용
+        // 1. 물리 엔진 (중력, 천장 충돌 등)
         applyEnemyPhysics(e);
 
-        // 2. 보스 착지 충격 효과
+        // 2. 보스 착지 이펙트
         if (e === boss) checkBossLandingEffect(e);
 
-        // 3. Gunner 공격 로직
+        // 플레이어와의 거리 계산 (미리 해둠)
+        const dist = e.position.distanceTo(player.position);
+
+        // 3. Gunner 공격 (사거리 제한 추가)
         if (e !== boss && e.userData.isGunner) {
-            e.userData.shootCooldown -= dt;
-            if (e.userData.shootCooldown <= 0) {
-                const dir = new THREE.Vector3().subVectors(player.position, e.position).normalize();
-                fireBullet(true, e.position.clone().add(new THREE.Vector3(0, 1.6, 0)), dir, 0.15);
-                e.userData.shootCooldown = 4.0; 
+            // [수정] 거리가 20m 이내일 때만 공격 시도 (너무 멀면 안 쏨)
+            if (dist < 16.0) {
+                e.userData.shootCooldown -= dt;
+                
+                if (e.userData.shootCooldown <= 0) {
+                    // 플레이어 쪽 바라보기 (쏘기 전에)
+                    e.lookAt(player.position.x, e.position.y, player.position.z);
+                    
+                    const dir = new THREE.Vector3().subVectors(player.position, e.position).normalize();
+                    fireBullet(true, e.position.clone().add(new THREE.Vector3(0, 1.6, 0)), dir, 0.15);
+                    e.userData.shootCooldown = 4.0; 
+                }
             }
         }
 
-        // ▼▼▼ [핵심] 보스 AI 코드가 반드시 이 루프 안에 있어야 함! ▼▼▼
+        // 4. 보스 AI 패턴
         if (e === boss) {
             e.userData.attackTimer += dt;
-            const distToPlayer = e.position.distanceTo(player.position);
             
-            // (1) 거대 근접 공격
-            if (distToPlayer < e.userData.meleeRange) {
+            // (1) 근접 공격
+            if (dist < e.userData.meleeRange) {
                 e.userData.meleeCooldown -= dt;
                 if (e.userData.meleeCooldown <= 0) {
                     state.hp -= e.userData.meleeDamage * (e.userData.phase * 0.5 + 0.5);
@@ -2062,7 +2071,7 @@ updateGround(player);
                 }
             }
 
-            // (2) 특수 패턴 (타입별)
+            // (2) 보스 특수 스킬 (코드 유지)
             const phase = e.userData.phase;
             const type = e.userData.type;
             const attackDelay = phase === 1 ? 3.0 : phase === 2 ? 2.0 : 1.2;
@@ -2071,7 +2080,6 @@ updateGround(player);
                 e.userData.attackTimer = 0;
                 const bossHeadPos = e.position.clone().add(new THREE.Vector3(0, 6.0, 0));
 
-                // TANK: 산탄 발사
                 if (type === 'tank') { 
                     const count = 8 * phase; 
                     for (let i = 0; i < count; i++) {
@@ -2082,7 +2090,6 @@ updateGround(player);
                     shakeCamera(0.2, 100);
                 }
                 
-                // RUSH: 돌진
                 if (type === 'rush') {
                     const dir = new THREE.Vector3().subVectors(player.position, e.position).normalize();
                     const rushDist = 10 * phase; 
@@ -2091,7 +2098,6 @@ updateGround(player);
                     spawnDebris(e.position, 0xffaa00, 5);
                 }
 
-                // SUMMONER: 소환
                 if (type === 'summoner') {
                     const count = (phase === 3 ? 2 : 1);
                     for (let i = 0; i < count; i++) {
@@ -2107,7 +2113,6 @@ updateGround(player);
                     }
                 }
 
-                // PHASE 3: 순간이동
                 if (phase === 3 && Math.random() < 0.3) {
                     const teleportPos = player.position.clone().add(new THREE.Vector3((Math.random()-0.5)*10, 0, (Math.random()-0.5)*10));
                     e.position.copy(teleportPos);
@@ -2116,33 +2121,41 @@ updateGround(player);
                 }
             }
         } 
-        // ▲▲▲ [보스 AI 코드 끝] ▲▲▲
 
-        // 4. 적 이동 (플레이어 추격)
-        const attackRange = (e === boss) ? e.userData.meleeRange : 1.2;
-        const dist = e.position.distanceTo(player.position);
+        // 5. 이동 및 애니메이션 (추격)
+        // [수정] 멈추는 거리(stopRange)를 적 종류마다 다르게 설정
+        let stopRange = 1.2; // 기본값 (일반 적: 칼질해야 하니 가까이)
+
+        if (e === boss) {
+            stopRange = e.userData.meleeRange; // 보스: 자기 사거리
+        } else if (e.userData.isGunner) {
+            stopRange = 10.0; // Gunner: 15m 거리 유지 (너무 붙지 않음)
+        }
         
-        if (dist > attackRange) {
+        // 정해진 사거리보다 멀면 추격
+        if (dist > stopRange) {
             const speed = (e === boss) ? 0.06 : 0.1;
             moveEnemyLikePlayer(e, player.position, speed);
         } else {
+            // 사거리 안이면 멈춰서 플레이어 바라봄
             e.lookAt(player.position.x, e.position.y, player.position.z);
-            // 일반 적 근접 공격
-            if (e !== boss && dist < 1.2) { 
+            
+            // 일반 적은 붙었을 때 때림 (Gunner는 위에서 총 쏩니다)
+            if (e !== boss && !e.userData.isGunner && dist < 1.2) { 
                 state.hp -= 0.5; 
                 document.getElementById('damage-overlay').style.opacity = 0.3; 
             } 
         }
 
-        // 5. 애니메이션
+        // 애니메이션
         const anim = time * (e === boss ? 4 : 10);
         e.userData.lArm.root.rotation.x = -Math.sin(anim);
         e.userData.rArm.root.rotation.x = Math.sin(anim);
         e.userData.lLeg.root.rotation.x = Math.sin(anim);
         e.userData.rLeg.root.rotation.x = -Math.sin(anim);
 
-    });
-
+    }); // 루프 끝
+        
         
     // 10. 게임오버
     if(state.hp<=0){
