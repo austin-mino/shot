@@ -1521,7 +1521,7 @@ function applyEnemyPhysics(enemy) {
     }
 }
 
-// 2. 적의 벽 충돌 감지 (플레이어 playerIntersectsWall과 동일)
+// 1. 적의 벽 충돌 감지 (안전장치 추가됨)
 function enemyIntersectsWall(enemy) {
     const rayOrigin = new THREE.Vector3(enemy.position.x, enemy.position.y + 1.0, enemy.position.z);
     
@@ -1533,61 +1533,60 @@ function enemyIntersectsWall(enemy) {
     ];
 
     const wallRay = new THREE.Raycaster();
-    // 적의 크기(박스 사이즈)에 따라 체크 반지름 조정 (보스는 더 크게)
-    // 기본 적: 0.8 -> 반지름 약 0.5~0.6
-    // 보스: 1.4 -> 반지름 약 1.0
-    const checkRadius = enemy.userData.boxSize ? Math.max(enemy.userData.boxSize.x, enemy.userData.boxSize.z) * 0.6 : 0.6;
+    
+    // [핵심 수정] boxSize가 없으면 기본값(0.6)을 쓰도록 물음표(?)로 안전하게 처리
+    const size = (enemy.userData.boxSize) 
+        ? Math.max(enemy.userData.boxSize.x, enemy.userData.boxSize.z) * 0.5 
+        : 0.6;
 
     for (const dir of directions) {
         wallRay.set(rayOrigin, dir);
         const hits = wallRay.intersectObjects(colliders.walls, false);
         
         if (hits.length > 0) {
-            if (hits[0].distance < checkRadius) {
-                // 경사로(Floor) 무시 로직
+            if (hits[0].distance < size) {
                 const hitObj = hits[0].object;
                 const hitPointY = hits[0].point.y;
+                // 경사로(Floor)는 밟고 지나가도록 무시
                 if (hitObj.userData.isFloor && hitPointY <= enemy.position.y + 0.5) {
                     continue;
                 }
-                return true; // 벽 충돌
+                return true; // 벽 막힘
             }
         }
     }
     return false;
 }
 
-// 3. 적 이동 함수 (플레이어와 똑같이 X/Z 분리 이동 + 벽 타기)
+// 2. 적 이동 함수 (이것도 확실하게 덮어쓰세요)
 function moveEnemyLikePlayer(enemy, targetPos, speed) {
-    // 이동 방향 계산 (Y축 제외)
-    const direction = new THREE.Vector3()
-        .subVectors(targetPos, enemy.position);
-    direction.y = 0;
+    if (!targetPos) return; // 목표가 없으면 중단 (에러 방지)
+
+    const direction = new THREE.Vector3().subVectors(targetPos, enemy.position);
+    direction.y = 0; // 높이 무시
     direction.normalize();
 
-    // 이동 벡터
     const moveX = direction.x * speed;
     const moveZ = direction.z * speed;
 
-    // 1) X축 이동 시도
+    // X축 이동 시도
     const oldX = enemy.position.x;
     enemy.position.x += moveX;
     if (enemyIntersectsWall(enemy)) {
         enemy.position.x = oldX; // 막히면 취소
     }
 
-    // 2) Z축 이동 시도 (독립적)
+    // Z축 이동 시도
     const oldZ = enemy.position.z;
     enemy.position.z += moveZ;
     if (enemyIntersectsWall(enemy)) {
         enemy.position.z = oldZ; // 막히면 취소
     }
 
-    // 3) 회전 (바라보기)
-    // 보스나 적이 이동할 때 자연스럽게 타겟을 봄
+    // 바라보기
     enemy.lookAt(targetPos.x, enemy.position.y, targetPos.z);
 }
-
+        
         // [추가] 근접 공격 함수
 function meleeAttack() {
     state.isSwinging = true;
