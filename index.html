@@ -1171,10 +1171,10 @@ function applyBossAppearance(boss) {
     }
 }
 
-// [최종 진화] 보스 소환: 거대화 + 코어 장착 + 스탯 대폭 상향
+// [최종] 보스 소환 (기존 적 전멸 + 보스 등장)
 function spawnBoss() {
-    // 1. 위치 계산 & 경고 마커 (기존 연출 유지)
-    const spawnDist = 30; // 더 멀리서 등장
+    // 1. 위치 계산 & 경고 마커
+    const spawnDist = 30; 
     const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion).normalize();
     const spawnPos = player.position.clone().add(direction.multiplyScalar(spawnDist));
     
@@ -1182,7 +1182,7 @@ function spawnBoss() {
     spawnPos.z = Math.max(-MAP_HALF + 20, Math.min(MAP_HALF - 20, spawnPos.z));
     spawnPos.y = groundY; 
 
-    // 경고 마커 (더 거대하게)
+    // 경고 마커
     const markerGeo = new THREE.CylinderGeometry(8, 8, 100, 32); 
     const markerMat = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
     const marker = new THREE.Mesh(markerGeo, markerMat);
@@ -1197,58 +1197,61 @@ function spawnBoss() {
         bossMsg.style.color = '#ff0000';
     }
 
-    // 2. 2.5초 후 낙하
+    // 2. 2.5초 후 기존 적 삭제 & 보스 투하
     setTimeout(() => {
         scene.remove(marker);
         if(bossMsg) bossMsg.style.display = 'none';
 
+        // ===============================================
+        // [핵심 추가] 보스 등장 전, 맵에 있는 모든 적 제거
+        // ===============================================
+        state.enemies.forEach(enemy => {
+            scene.remove(enemy); // 화면에서 삭제
+        });
+        state.enemies = [];      // 적 목록 비우기
+        state.gunnerCount = 0;   // Gunner 카운트도 0으로 초기화
+        // ===============================================
+
         const bossType = Math.random() < 0.33 ? 'tank' : Math.random() < 0.5 ? 'rush' : 'summoner';
         
-        // --- 스탯 설정 ---
+        // 보스 생성
         boss = createDetailedHumanoid(0xffffff, true); 
         
-        // [1] 크기: 4배 (건물 1층 높이보다 큼)
         const scale = 4.0; 
         boss.scale.set(scale, scale, scale); 
-        
-        // [2] 히트박스: 덩치에 맞게 아주 크게 설정
         boss.userData.boxSize = new THREE.Vector3(3.0, 7.5, 3.0);
-
-        // [3] 체력: 3000 (기존 1000은 순삭됨)
         boss.userData.maxHp = 3000;
         boss.userData.hp = 3000;
-        
-        // [4] 공격 설정
         boss.userData.isGunner = false;
         boss.userData.phase = 1;
         boss.userData.lastPhase = 1;
         boss.userData.type = bossType;
         
         boss.userData.attackTimer = 0;
-        boss.userData.meleeRange = 7.0; // 팔이 기니까 사거리도 7m
-        boss.userData.meleeDamage = 30; // 한 대 맞으면 엄청 아픔
+        boss.userData.meleeRange = 7.0; 
+        boss.userData.meleeDamage = 30; 
         boss.userData.meleeCooldown = 0;
-        
         boss.userData.isFallingEntry = true; 
 
-        // 외형 적용
         applyBossAppearance(boss);
 
-        // --- [NEW] 보스 전용 코어(Core) 추가 ---
-        // 가슴팍에 빛나는 구슬을 달아서 약점/동력원 느낌을 줌
+        // 코어 추가
         const coreGeo = new THREE.SphereGeometry(0.3, 16, 16);
-        const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff }); // 나중에 applyBossAppearance에서 색 입힘
+        const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff }); 
         const core = new THREE.Mesh(coreGeo, coreMat);
-        core.position.set(0, 1.2, 0.3); // 가슴 앞쪽
-        boss.add(core); // 보스 몸에 부착
-        boss.userData.core = core; // 참조 저장
+        core.position.set(0, 1.2, 0.3); 
+        boss.add(core); 
+        boss.userData.core = core; 
+        
+        // applyBossAppearance 한 번 더 호출해서 코어 색상까지 확실하게 적용
+        applyBossAppearance(boss);
 
         // 위치 잡기
         boss.position.copy(spawnPos);
-        boss.position.y += 60; // 더 높은 곳에서 낙하
+        boss.position.y += 60; 
 
         if (!boss.userData.velocity) boss.userData.velocity = new THREE.Vector3();
-        boss.userData.velocity.y = -3.0; // 엄청 빠르게 쾅!
+        boss.userData.velocity.y = -3.0; 
 
         scene.add(boss);
         state.bossSpawned = true;
@@ -1257,10 +1260,9 @@ function spawnBoss() {
         document.getElementById('boss-hp-fill').style.width = '100%';
         document.getElementById('boss-phase').innerText = `OMEGA ${bossType.toUpperCase()} - PHASE 1`;
 
-        console.log(`OMEGA BOSS (${bossType}) DROPPING!`);
+        console.log(`OMEGA BOSS (${bossType}) CLEARED THE AREA & DROPPING!`);
     }, 2500); 
 }
-
 
         function spawnDebris(pos, color) {
             for(let i=0; i<8; i++) {
