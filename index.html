@@ -2078,7 +2078,7 @@ updateGround(player);
 // 9. 적/보스 스폰 & AI
     
     // [수정] 적 스폰 (최대 16마리, Gunner 최대 3마리 제한)
-    if (!boss && state.enemies.length < 36 && Math.random() < 0.06) {
+    if (!boss && !state.isBossWarning && state.enemies.length < 36 && Math.random() < 0.06) {
         
         let isGunner = false;
 
