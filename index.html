@@ -1810,6 +1810,66 @@ function checkPlayerWallCollision(player) {
     }
     return false; // 충돌 없음
 }
+
+
+        // [최적화] 보스 착지 (가벼운 버전 - 렉 없음)
+function checkBossLandingEffect(boss) {
+    if (!boss.userData.isFallingEntry) return;
+
+    if (boss.userData.isGrounded) {
+        boss.userData.isFallingEntry = false; 
+
+        // 1. 카메라 지진 (강도 대폭 감소)
+        shakeCamera(0.8, 300); // 2.0 -> 0.8로 줄임
+
+        // 2. 충격파 링 (도형 단순화)
+        // 세그먼트를 (16, 100) -> (4, 16)으로 줄여서 매우 가볍게 만듦
+        const geometry = new THREE.TorusGeometry(3, 1, 4, 16);
+        const material = new THREE.MeshBasicMaterial({ 
+            color: 0xffaa00, 
+            transparent: true, 
+            opacity: 0.8,
+            side: THREE.DoubleSide
+        });
+        const shockwave = new THREE.Mesh(geometry, material);
+        
+        shockwave.position.copy(boss.position);
+        shockwave.position.y += 0.5;
+        shockwave.rotation.x = Math.PI / 2;
+        shockwave.scale.set(1, 1, 0.1);
+
+        scene.add(shockwave);
+
+        // 3. 섬광 (유지하되 강도 조절)
+        const flashLight = new THREE.PointLight(0xffaa00, 30, 40);
+        flashLight.position.copy(boss.position);
+        flashLight.position.y += 5;
+        scene.add(flashLight);
+
+        // 안전장치 (필수)
+        if (!state.shockwaves) state.shockwaves = [];
+        state.shockwaves.push({ 
+            mesh: shockwave, 
+            light: flashLight,
+            opacity: 1.0 
+        });
+
+        // 4. [핵심] 파편 개수 대폭 감소
+        // 반복문 제거하고 딱 한 번만 호출
+        // 총 8개만 생성 (아까는 90개였음)
+        spawnDebris(boss.position, 0xffaa00, 5); // 노란색 5개
+        spawnDebris(boss.position, 0x555555, 3); // 회색 3개
+
+        // 5. 넉백 (유지)
+        const dist = player.position.distanceTo(boss.position);
+        if (dist < 20) {
+            const pushDir = new THREE.Vector3().subVectors(player.position, boss.position).normalize();
+            player.position.add(pushDir.multiplyScalar(5)); 
+        }
+        
+        console.log("BOSS LANDED (LITE MODE)");
+    }
+}
         
 
         
