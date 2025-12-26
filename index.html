@@ -1331,7 +1331,7 @@ function spawnEnemySafely(enemy) {
     
     let attempt = 0;
     // 시도 횟수를 50번으로 늘려서 빈 공간을 더 집요하게 찾음
-    const maxAttempts = 100; 
+    const maxAttempts = 1000; 
 
     while (attempt < maxAttempts) {
         // 1. 플레이어 주변 랜덤 위치 (건물 뚫고 나오지 않게 거리 약간 조정)
@@ -1960,14 +1960,14 @@ updateGround(player);
 // 9. 적/보스 스폰 & AI
     
     // [수정] 적 스폰 (최대 16마리, Gunner 최대 3마리 제한)
-    if (!boss && state.enemies.length < 16 && Math.random() < 0.03) {
+    if (!boss && state.enemies.length < 25 && Math.random() < 0.03) {
         
         let isGunner = false;
 
         // [핵심] 현재 Gunner가 3명 미만일 때만 Gunner 생성 시도 (확률 40%)
         // 3명 꽉 찼으면 무조건 일반 적(false)이 됨
         if (state.gunnerCount < 4) {
-            isGunner = Math.random() < 0.4;
+            isGunner = Math.random() < 0.6;
         }
 
         // Gunner면 주황색(ffaa00), 일반 적은 빨간색(ff4444)
