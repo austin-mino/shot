@@ -1171,18 +1171,27 @@ function applyBossAppearance(boss) {
     }
 }
 
-// [최종] 보스 소환 (기존 적 전멸 + 보스 등장)
+// [최종] 보스 소환 (잡몹 제거 -> 5초 정적 -> 보스 등판)
 function spawnBoss() {
-    // 1. 위치 계산 & 경고 마커
+    // [중요] 중복 실행 방지를 위해 플래그를 함수 시작하자마자 킴
+    state.bossSpawned = true; 
+
+    // 1. [1차 청소] 경고 뜨자마자 일단 적들 다 없애서 분위기 잡기
+    state.enemies.forEach(enemy => scene.remove(enemy));
+    state.enemies = [];
+    state.gunnerCount = 0;
+
+    // 2. 위치 계산
     const spawnDist = 30; 
     const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(player.quaternion).normalize();
     const spawnPos = player.position.clone().add(direction.multiplyScalar(spawnDist));
     
+    // 맵 밖 방지
     spawnPos.x = Math.max(-MAP_HALF + 20, Math.min(MAP_HALF - 20, spawnPos.x));
     spawnPos.z = Math.max(-MAP_HALF + 20, Math.min(MAP_HALF - 20, spawnPos.z));
     spawnPos.y = groundY; 
 
-    // 경고 마커
+    // 3. 경고 마커 생성
     const markerGeo = new THREE.CylinderGeometry(8, 8, 100, 32); 
     const markerMat = new THREE.MeshBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
     const marker = new THREE.Mesh(markerGeo, markerMat);
@@ -1197,26 +1206,22 @@ function spawnBoss() {
         bossMsg.style.color = '#ff0000';
     }
 
-    // 2. 2.5초 후 기존 적 삭제 & 보스 투하
+    // 4. [5초 대기] 긴장감 조성
     setTimeout(() => {
         scene.remove(marker);
         if(bossMsg) bossMsg.style.display = 'none';
 
-        // ===============================================
-        // [핵심 추가] 보스 등장 전, 맵에 있는 모든 적 제거
-        // ===============================================
-        state.enemies.forEach(enemy => {
-            scene.remove(enemy); // 화면에서 삭제
-        });
-        state.enemies = [];      // 적 목록 비우기
-        state.gunnerCount = 0;   // Gunner 카운트도 0으로 초기화
-        // ===============================================
+        // 5. [2차 청소] 5초 기다리는 동안 눈치 없이 스폰된 적이 있다면 제거
+        state.enemies.forEach(enemy => scene.remove(enemy));
+        state.enemies = [];
+        state.gunnerCount = 0;
 
+        // 6. 보스 생성 시작
         const bossType = Math.random() < 0.33 ? 'tank' : Math.random() < 0.5 ? 'rush' : 'summoner';
         
-        // 보스 생성
         boss = createDetailedHumanoid(0xffffff, true); 
         
+        // 보스 스펙 설정
         const scale = 4.0; 
         boss.scale.set(scale, scale, scale); 
         boss.userData.boxSize = new THREE.Vector3(3.0, 7.5, 3.0);
@@ -1235,7 +1240,7 @@ function spawnBoss() {
 
         applyBossAppearance(boss);
 
-        // 코어 추가
+        // 코어 장착
         const coreGeo = new THREE.SphereGeometry(0.3, 16, 16);
         const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff }); 
         const core = new THREE.Mesh(coreGeo, coreMat);
@@ -1243,27 +1248,30 @@ function spawnBoss() {
         boss.add(core); 
         boss.userData.core = core; 
         
-        // applyBossAppearance 한 번 더 호출해서 코어 색상까지 확실하게 적용
-        applyBossAppearance(boss);
+        applyBossAppearance(boss); // 색상 재적용
 
-        // 위치 잡기
+        // 하늘에서 낙하 위치 설정
         boss.position.copy(spawnPos);
         boss.position.y += 60; 
 
         if (!boss.userData.velocity) boss.userData.velocity = new THREE.Vector3();
         boss.userData.velocity.y = -3.0; 
 
+        // 씬 추가
         scene.add(boss);
-        state.bossSpawned = true;
+        // bossSpawned는 이미 위에서 true로 했으니 그대로 둠
 
+        // UI 표시
         document.getElementById('boss-ui').style.display = 'block';
         document.getElementById('boss-hp-fill').style.width = '100%';
         document.getElementById('boss-phase').innerText = `OMEGA ${bossType.toUpperCase()} - PHASE 1`;
 
-        console.log(`OMEGA BOSS (${bossType}) CLEARED THE AREA & DROPPING!`);
-    }, 2500); 
+        console.log(`OMEGA BOSS (${bossType}) ARRIVED!`);
+    }, 5000); // 5000ms = 5초
 }
 
+
+        
         function spawnDebris(pos, color) {
             for(let i=0; i<8; i++) {
                 const m = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.2,0.2), new THREE.MeshBasicMaterial({color:color}));
