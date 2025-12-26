@@ -2250,11 +2250,11 @@ updateGround(player);
         state.nextBossScore += 4000;
     }
 
-    // ★★★ [중요] 모든 적(보스 포함) 루프 시작 ★★★
+// ★★★ [중요] 모든 적(보스 포함) 루프 시작 ★★★
     const allEnemies = [...state.enemies];
     if (boss) allEnemies.push(boss);
 
-  allEnemies.forEach(e => { 
+    allEnemies.forEach(e => { 
         
         // 1. 물리 엔진 (중력, 천장 충돌 등)
         applyEnemyPhysics(e);
@@ -2264,6 +2264,7 @@ updateGround(player);
 
         // 플레이어와의 거리 계산 (미리 해둠)
         const dist = e.position.distanceTo(player.position);
+        const dt = 0.016; // 프레임 시간 보정값
 
         // 3. Gunner 공격 (사거리 제한 추가)
         if (e !== boss && e.userData.isGunner) {
@@ -2458,6 +2459,7 @@ updateGround(player);
                     // 착지 시 checkBossLandingEffect가 발동되어 충격파 발생함
                 }
             }
+        } // ★ [중요] 여기서 보스 AI 닫기 (원래 없어서 문제였음)
 
         // 5. 이동 및 애니메이션 (추격)
         // [수정] 멈추는 거리(stopRange)를 적 종류마다 다르게 설정
@@ -2490,8 +2492,8 @@ updateGround(player);
         e.userData.rArm.root.rotation.x = Math.sin(anim);
         e.userData.lLeg.root.rotation.x = Math.sin(anim);
         e.userData.rLeg.root.rotation.x = -Math.sin(anim);
-
-    }); // 루프 끝
+        
+    }); // ★ [중요] 여기서 루프 끝 (불필요한 괄호들 제거됨)
         
         
     // 10. 게임오버
