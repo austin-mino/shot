@@ -140,7 +140,7 @@
             isGameOver: false, 
             isGameActive: false,
             bossSpawned: false, 
-            nextBossScore: 5000,
+            nextBossScore: 4000,
             bullets: [], 
             enemies: [], 
             obstacles: [], 
@@ -2012,7 +2012,7 @@ updateGround(player);
     // 보스 스폰 (기존 코드 유지)
     if (state.score >= state.nextBossScore && !state.bossSpawned) {
         spawnBoss();
-        state.nextBossScore += 5000;
+        state.nextBossScore += 4000;
     }
 
     // ★★★ [중요] 모든 적(보스 포함) 루프 시작 ★★★
