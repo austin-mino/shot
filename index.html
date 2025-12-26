@@ -1123,20 +1123,23 @@ if (isMobile) {
     });
 }
 
-       // [업그레이드] 외형 + 코어 발광 효과
+     /* =========================================
+   [수정 완료] 보스 외형 적용 함수 (찌꺼기 제거됨)
+   ========================================= */
 function applyBossAppearance(boss) {
     let mainColor, glowColor;
 
+    // 1. 보스 타입별 색상 및 빛 설정
     switch (boss.userData.type) {
-        case 'tank': // 파괴자 (검정+빨강)
+        case 'tank': // 탱크: 검정 갑옷 + 붉은 빛
             mainColor = 0x1a1a1a; 
             glowColor = 0xff0000; 
             break;
-        case 'rush': // 스피드스터 (은색+전기파랑)
+        case 'rush': // 러시: 은색 갑옷 + 청록 빛
             mainColor = 0x888888;
             glowColor = 0x00ffff; 
             break;
-        case 'summoner': // 지배자 (골드+보라)
+        case 'summoner': // 서머너: 보라 갑옷 + 골드 빛
             mainColor = 0x442244;
             glowColor = 0xffd700; 
             break;
@@ -1145,50 +1148,28 @@ function applyBossAppearance(boss) {
             glowColor = 0xffffff;
     }
 
-    // 1. 몸체 재질 적용
+    // 2. 몸체 재질 적용 (코어 제외)
     boss.traverse((child) => {
-        if (child.isMesh && child !== boss.userData.core) { // 코어 제외
+        if (child.isMesh && child !== boss.userData.core) { 
             child.material = child.material.clone();
+            
+            // 색상 및 재질감 설정
             child.material.color.set(mainColor);
-            child.material.roughness = 0.2; // 갑옷 느낌
+            child.material.roughness = 0.2; // 반질반질한 금속 느낌
             child.material.metalness = 0.9;
+            
+            // 야광 효과 (은은하게)
             child.material.emissive.set(glowColor);
-            child.material.emissiveIntensity = 0.3; // 몸은 은은하게
+            child.material.emissiveIntensity = 0.3; 
         }
     });
 
-    // 2. 코어(심장) 재질 적용 - 아주 밝게 빛남
+    // 3. 코어(가슴 구슬) 재질 적용 (강하게 발광)
     if (boss.userData.core) {
         boss.userData.core.material.color.set(glowColor);
-        // BasicMaterial이라 emissive 없어도 자체 발광처럼 보임, 
-        // 하지만 주변광 영향을 위해 포스트프로세싱(Bloom)이 있으면 좋음.
-        // 여기선 색상만 강렬하게 설정.
+        // 코어는 MeshBasicMaterial이라 별도 설정 없이도 밝게 보임
     }
 }
-
-            // 1. 기본 색상 설정
-            child.material.color.set(mainColor);
-
-            // 2. 금속 재질감 (로봇 느낌)
-            child.material.roughness = 0.3; // 매끈하게
-            child.material.metalness = 0.8; // 금속성 강하게
-
-            // 3. 야광(Glow) 효과 (어두운 곳에서도 빛남)
-            child.material.emissive.set(glowColor);
-            child.material.emissiveIntensity = 0.8; // 빛 세기
-        
-    });
-}
-    boss.traverse(obj => {
-        if (obj.isMesh && obj.material) {
-            obj.material = obj.material.clone();
-            obj.material.color.set(color);
-            obj.material.emissive = new THREE.Color(color);
-            obj.material.emissiveIntensity = 0.4;
-        }
-    });
-}
-
 
 // [최종 진화] 보스 소환: 거대화 + 코어 장착 + 스탯 대폭 상향
 function spawnBoss() {
